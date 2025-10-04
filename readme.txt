@@ -115,6 +115,36 @@ This tag allows filters to be created to filter out community Join requests.
 No other data is used for this tag; If you wish to filter anything that
 contains a Join request, simply include this tag
 
+**[trade]**
+
+This tag allows filters to be created to filter out tradeskill links.
+No other data is used for this tag; If you wish to filter anything that
+contains a tradeskill link, simply include this tag.
+
+**[journal]**
+
+This tag allows filters to be created to filter out dungeon journal links.
+No other data is used for this tag; If you wish to filter anything that
+contains a journal link, simply include this tag.
+
+**[mount]**
+
+This tag allows filters to be created to filter out mount links.
+No other data is used for this tag; If you wish to filter anything that
+contains a mount link, simply include this tag.
+
+**[guild]**
+
+This tag allows filters to be created to filter out guild links.
+No other data is used for this tag; If you wish to filter anything that
+contains a guild link, simply include this tag.
+
+**[outfit]**
+
+This tag allows filters to be created to filter out outfit links.
+No other data is used for this tag; If you wish to filter anything that
+contains an outfit link, simply include this tag.
+
 **[nonlatin]**
 
 This tag allows filters messages that contain Chinese/Japanese/Korean characters
@@ -134,13 +164,30 @@ number.  For example, channel 1 would be zone, 2 would be city/trade, and so on.
 you wanted a filter to apply only to trade chat you could do "[channel=2]" somewhere
 in your filter.
 
+**[chname=name]**
+
+This tag allows filters to test that a line of text sourced from a specific channel
+name.  When the text sourced from a channel that does not have a chat channel name
+GIL will set the name to a value that corresponds to the type of chat it is, as
+follows:  say, yell, whisper, officer, guild, party, raid, raid_leader,
+instance_chat, instance_chat_leader, battleground, battleground_leader.
+
+As with other filter tags paces must be escaped with the backslash character. For
+example to create a filter that only applies to Trade chat you would use a tag with
+the spaces escaped: [chname=Trade\ -\ City].  If want to apply a filter only to guild
+chat you would use [chname=guild].
+
+The "Never filter party, guild, yourself, private messages" options still apply here,
+so if those are enabled even a filter with a channel name will not apply to those
+channels as they are configured to never be filtered.
+
 **SPECIAL CHARACTERS IN FILTERS**
 
-Spaces can be used in a [Contains] tag by escaping the character by putting a
-forward slash before the space (\).  Other characters can be escaped the same
+Spaces can be used in a [Contains] tag by escaping the character using a forward
+slash before the space (\).  Other characters can be escaped the same
 way: parenthesis (), brackets [], and backslash.  For example:
 
-  [contains=Filter\ this]
+  [contains=filter\ this]
 
 Here are some other examples:
 
@@ -176,7 +223,7 @@ The following commands are accessible by typing /gignore or /gi in the chat box:
 
 /gi list [days] - Show a list of all players on the global ignore list, along with their server, faction, and the date they were added to the list.  An optional number of days can be added if you'd like to only show people who have been on the list for [days] or more days
 
-/gi clear - Clear the global ignore list.  Please understand that clearing this list means that you are clearing everything on all characters that you've previous logged in as!  You will need to provide a follow up confirmation command before the clear will work
+/gi clear - Clear the global ignore list.  Please understand that clearing this list means that you are clearing everything on all characters that you've previous logged in as!  You will need to provide a follow up confirmation command before the clear will work.  This is a tricky command and most likely needs to be done on every character you have otherwise GIL will keep trying to add/remove people to the list when you login to other characters.
 
 /gi add player_name - This provides a way to add a player to the list, but the Blizzard UI and /ignore works too!  You can optionally add a reason as well.  If a server name is involved all spaces should be removed.  For example: /gi add mytoon-Area52 this is an ignore reason
 
@@ -201,6 +248,185 @@ The following commands are accessible by typing /gignore or /gi in the chat box:
 /gi server servername - Add or remove a whole-server ignore
 
 => VERSION HISTORY
+
+=> 11.2.0.4
+
+The retail and classic code is now one in the same!  This will make managing releases so much easier and we can expect that the classic version will no longer lag behind the retail version.  As a result both the retail and classic versions will now use the same version number which will be based on the retail wow version.
+
+Fixed a bug that was allowing some messages to show even when they were supposed to be disabled during login/synchronization.
+
+Added option to disable same-faction syncing to the account wide ignore list to the GUI options
+
+GIL now automatically declines guild invites from people on ignore, to go along with its duel and party invite declines.  I actually thought it already did this but someone pointed out it did not, so thank you!
+
+=> 11.2.0.3
+
+Added a "Prune" button to the ignore list to remove entries by the length of time they were in the list.  Previously this was only available using a chat command and not by using the GUI.
+
+When doing the prune button, I noticed the option to turn off synchronization messages was also only a chat command, so I added that to the GUI options.
+
+=> 11.2.0.2
+
+Fixed some issues with chat filtering tags which completely broke filtering.  This was introduced by some behind the scenes changes Blizzard made to how wow sends chat data.
+
+Added Russian translation. Credits to ZamestoTV for the work, thank you so much!
+
+=> 11.2.0.1
+
+Added new option to disable the ignore response that Global Ignore sends when a person is on ignore list.  Keep in mind that players who are on the Blizzard ignore list will still get an ignore response.  This is response is built into WoW, not part of Global Ignore
+
+Added new option to adjust the GUI window priority.  For example, some people have noticed that commands like /raidinfo show under the UI as the UI defaults to "DIALOG" level priority.  Changing this to MEDIUM will cause the raidinfo window to have a higher priority and show on top of the UI.
+
+=> 11.2.0
+
+Updated for new season 3 of TWW!
+
+=> 11.0.2.7
+
+Added new [chname=name] tag where name is the channel name that you want the filter to apply to. Reminder that spaces must be escaped with the backslash character for example [chname=Trade\ -\ City].  Text that does not have a channel will still have a channel name set as follows: say, yell, whisper, officer, guild, party, raid, raid_leader, instance_chat, instance_chat_leader, battleground, battleground_leader.
+
+Added new option to filter repeated messages in chat.  This is off by default but if enabled it will block players who spam the same message over and over again so long as it was within the last 50 messages processed.
+
+=> 11.0.2.6
+
+Added an option to "Never filter yourself" to the Chat Filtering options panel
+
+=> 11.0.2.5
+
+Fixed a small bug in the chat filtering
+
+=> 11.0.2.4
+
+Added an [outfit] tag to filter out outfit links.
+
+Updated the readme.txt and the CurseForge page to include the latest tags.
+
+After a few people have asked, I have created a "Buy me a Coffee" page if you like my addon and would like to buy be a coffee:
+https://buymeacoffee.com/missiceypop
+
+=> 11.0.2.3
+
+Fixed a bug with UI updating when using the ignore button
+
+The right click menu in the GIL ignore list UI now works again to allow editing notes, setting expirations, etc
+
+=> 11.0.2.2
+
+You can now ignore group leaders again directly from the LFG menu by right clicking their group
+
+Fixed a bug where the ignore list UI wasn't updating correctly when using the Remove Ignore button
+
+=> 11.0.2.1
+
+Added icon in addons list and added entry into addons compartment
+
+=> 11.0.2
+
+Bugfixes and more UI stuff working again
+
+=> 11.0.0
+
+Updated for The War Within pre-patch.  Some UI features are not yet working in this release (such as LFG tool hacks)
+
+=> 10.1.7
+
+Updated for latest WoW release
+
+Renamed GUI function
+
+=> 10.1.5
+
+Updated for latest WoW release
+
+Added anchor nil check recommended by Hollo6 for LFG list frame error
+
+=> 10.0.7.2
+
+Attempted (?) to fix a bug with M+ input when creating a group without SMS/Authenticator without breaking any other hacks.
+
+=> 10.0.7.1
+
+Fixed bug in Chat filter editor list where it would sometimes not display the filters correctly when selecting/scrolling the list
+
+Added new default filter to filter out Power Leveling sellers
+
+Fixed a bug when ignoring NPCs using the Unit Menu
+
+The Options tab now is a scrolling window so that more options can be added!
+
+Added a new section called User Interface options which now allows UI hacks to be enabled or disabled for those that experience issues with them.
+
+There is now an option to disable the ignore list synchronization warning message when it fails during login
+
+=> 10.0.7
+
+Updated for new patch
+
+Disabled all UI hacks temporarily because a few people are reporting problems that I cannot reproduce.  I am planning to add them back in the next update probably with an option to disable them in the settings for those who may have issues.
+
+=> 10.0.5.5
+
+Fixed issues with LFG tool, requiring completely reworked right click ignore menu and other changes
+
+=> 10.0.5.4
+
+GIL is now integrated into the LFG tool GUI for Raids and M+
+
+LFG groups whose leader is on your ignore list will be listed with a red font color.  Thanks to wildmandnd for the suggestion and a first crack at how to do it!
+
+GIL will now show that the LFG tool leader is ignored in the tooltip when you mouse over the listing
+
+GIL will now show the ignored player's note in the LFG tool's tooltip when you mouse over a listing
+
+When right clicking a listing in the LFG tool, you will now see the Leader's name and the option to ignore or remove them
+
+=> 10.0.5.3
+
+Added a "Blocked" column to the chat filter editor which shows the number of times the filter has blocked something without editing the filter.  Thanks to xruptor for inspiring me to add this in finally.
+
+Blocked count and overall blocked count now update in real-time when the chat filter tab is open.  You can watch the filter blocked count climb on a busy server if you get sick of watching paint dry!
+
+Added a new default filter for "Tradeskill sellers" to filter out tradeskill spam.  This is off by default.
+
+Removed the default gold seller filters as they no longer seem to be relevant.
+
+Added some more text into the localization
+
+When sync default chat filters is enabled, filters will now be added, removed and updated as the default changes automatically.  If you disable a default filter with syncing on, it will not be reenabled but they will still update.
+
+=> 10.0.5.2
+
+Added new [journal] tag to filter all boss links for Dungeon/Raid journal
+
+Added new [guild] tag to filter all guild links
+
+Added new [trade] tag to filter all tradeskill links
+
+Added new [mount] tag to filter all mount links
+
+All new tags (journal, guild, trade, and mount) are included in the [link] filter which makes things like the Anal spam filter better (or any filter that uses link tag)
+
+Added new default Mythic+ Seller filter which is disabled by default
+
+Added new IDs to the default filters, so that defaults can be added, removed, and updated in the future based on community feedback.
+
+Reverted the UI strata back to "DIALOG" from "MEDIUM".  Added extra checking in filtering to handle invalid link formats, and other minor changes.
+
+GIL now detects the current WOW version (which is why the classic version isn't updated alongside this release).  I will be experimenting with one single GIL version that works with everything in the future.
+
+=> 10.0.5.1
+
+Now filters "Unknown friend response" error message during login
+
+Additional checks for invalid character names
+
+Updated to use proper C_PartyInfo references used by latest API
+
+=> 10.0.2.1
+
+Updated for Dragonflight
+Fixed UI crashes
+Changed strata of UI from DIALOG to MEDIUM to provide better layering with other UI elements
 
 => 9.0.5.2
 

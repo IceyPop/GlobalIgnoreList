@@ -5,6 +5,7 @@
 GIL_Loaded				= false
 GIL_SyncOK				= false
 GIL_SyncTried			= false
+GIL_InSync				= false
 lastFilterError			= false
 
 local _, L				= ...
@@ -15,19 +16,20 @@ local safeToLoad		= false
 local doLoginIgnore		= true
 local faction			= nil
 local maxIgnoreSize		= 50
-local maxSyncTries		= 2
-local maxHistorySize	= 100
+local maxSyncTries		= 3
+local maxHistorySize	= 200
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
 local timer				= 0
 local loadedTime		= GetTime()
 local lastSentIgnore	= ""
-local lastFilterMsg		= ""
+local lastFilterMsgID	= -1
 local lastFilterResult	= ""
 local filterDefDesc		= {}
 local filterDefFilter	= {}
 local filterDefActive   = {}
+local filterDefID		= {}
 local needPartyClose	= false
 local gotGroup          = IsInGroup()
 local partyNameUI		= ""
@@ -35,8 +37,8 @@ local groupWarning      = {}
 local MSG_LOGOFF		= ERR_FRIEND_OFFLINE_S:gsub("%%s", ".+")
 local MSG_LOGON			= ERR_FRIEND_ONLINE_SS:gsub("|Hplayer:%%s|h%[%%s%]|h", "|Hplayer:.+|h%%[.+%%]|h")
 local filterLoginMsgs   = true
-
---print ("DEBUG gotGroup=" .. (tostring(gotGroup) or "NIL"))
+local gilFloodData		= {}
+local gilFloodSize		= 50
 
 local BlizzardAddIgnore			= nil
 local BlizzardDelIgnore			= nil
@@ -44,13 +46,19 @@ local BlizzardDelIgnoreByIndex	= nil
 local BlizzardAddOrDelIgnore	= nil
 local BlizzardInviteUnit		= nil
 
+--if wowIsERA == true then print("DEBUG WOW IS ERA") end
+--if wowIsTBC == true then print("DEBUG WOW IS TBC") end
+--if wowIsWrath == true then print("DEBUG WOW IS WRATH") end
+--if wowIsRetail == true then print("DEBUG WOW IS RETAIL") end
+--if wowIsClassic == true then print("DEBUG WOW IS CLASSIC") end
+
 ----------------------------------
 -- Global Ignore List Functions --
 ----------------------------------
 
 function debugMsg (msg)
 --	if GlobalIgnoreDB.showIgnoreDebug == true then
-		print("|cffffff00Global Ignore: " .. msg)
+--		print("|cffffff00Global Ignore: " .. msg)
 --	end
 end
 
@@ -76,6 +84,53 @@ function dayString (value)
 	end
 end
 
+local function hasDeleted (name)
+
+	if not name then return 0 end
+	
+	for count = 1, #GlobalIgnoreDB.delList do
+		--debugMsg("Comparing " .. GlobalIgnoreDB.delList[count] .. " to " .. name)
+		
+		if GlobalIgnoreDB.delList[count] == name then
+			debugMsg("Has deleted TRUE for " .. name)
+			return count
+		end
+	end
+	
+	debugMsg("Has deleted false for " .. name)
+	
+	return 0
+end
+
+local function addDeleted (name)
+
+	local idx = hasDeleted(name)
+	
+	debugMsg("addDeleted: hasDeleted " .. idx)
+	
+	if idx == 0 then		
+		if #GlobalIgnoreDB.delList >= maxHistorySize then
+			table.remove(GlobalIgnoreDB.delList, 1)
+		end
+		
+		debugMsg("Adding " .. name .. " (".. idx .. ") to delete list")
+		
+ 		GlobalIgnoreDB.delList[#GlobalIgnoreDB.delList + 1] = name
+ 	end
+end
+
+local function removeDeleted (name)
+	local idx = hasDeleted(name)
+		
+	if idx > 0 then
+		debugMsg("Removing " .. name .. " (".. idx .. ") from delete list")
+		table.remove(GlobalIgnoreDB.delList, idx)
+		
+		local idx = hasDeleted(name)
+		debugMsg("After removal idx " .. idx)
+	end
+end
+
 local function AddToList(newname, newfaction, newnote, newtype)
 
 	local index = #GlobalIgnoreDB.ignoreList+1
@@ -86,12 +141,21 @@ local function AddToList(newname, newfaction, newnote, newtype)
 	GlobalIgnoreDB.notes[index] = (newnote or "")
 	GlobalIgnoreDB.expList[index] = GlobalIgnoreDB.defexpire
 	GlobalIgnoreDB.typeList[index] = (newtype or "player")
-	GlobalIgnoreDB.syncInfo[index] = {}	
+	GlobalIgnoreDB.syncInfo[index] = {}
+
+	removeDeleted(newname)
+	
+	GIL_LFG_Refresh()
 end
+
 
 local function RemoveFromList(index)
 
 	if index <= #GlobalIgnoreDB.ignoreList then
+		local name = GlobalIgnoreDB.ignoreList[index]
+				
+		addDeleted(name)
+		
 		table.remove(GlobalIgnoreDB.ignoreList, index)
 		table.remove(GlobalIgnoreDB.factionList, index)
 		table.remove(GlobalIgnoreDB.dateList, index)
@@ -99,6 +163,16 @@ local function RemoveFromList(index)
 		table.remove(GlobalIgnoreDB.expList, index)
 		table.remove(GlobalIgnoreDB.typeList, index)
 		table.remove(GlobalIgnoreDB.syncInfo, index)
+	end
+end
+	
+function RemoveChatFilter (index)
+	if index <= #GlobalIgnoreDB.filterList then
+		table.remove(GlobalIgnoreDB.filterList,		index)
+		table.remove(GlobalIgnoreDB.filterDesc,		index)
+		table.remove(GlobalIgnoreDB.filterCount,	index)
+		table.remove(GlobalIgnoreDB.filterActive,	index)
+		table.remove(GlobalIgnoreDB.filterID,		index)
 	end
 end
 
@@ -145,6 +219,30 @@ end
 local function isServerMatch (server1, server2)
 
 	return Proper(server1) == Proper(server2)	
+end
+
+local function hasFilterID (id)
+
+	for count = 1, #GlobalIgnoreDB.filterDesc do
+		if GlobalIgnoreDB.filterID[count] == id then
+			return count
+		end
+	end
+	
+	return 0
+end
+
+local function isDefFilterID (id)
+
+	if (id == nil or id == "") then return -1 end
+
+	for count = 1, #filterDefID do
+		if filterDefID[count] == id then
+			return count
+		end
+	end
+	
+	return 0
 end
 
 local function hasIgnored (name)
@@ -231,40 +329,6 @@ function hasAnyIgnored (name)
 	return 0
 end
 
-local function hasDeleted (name)
-
-	if not name then return 0 end
-	
-	for count = 1, #GlobalIgnoreDB.delList do
-		if GlobalIgnoreDB.delList[count] == name then
-			return count
-		end
-	end
-	
-	return 0
-end
-
-local function addDeleted (name)
-
-	local idx = hasDeleted(name)
-	
-	if idx == 0 then
-		if #GlobalIgnoreDB.delList >= maxHistorySize then
-			table.remove(GlobalIgnoreDB.delList, 1)
-		end
-		
- 		GlobalIgnoreDB.delList[#GlobalIgnoreDB.delList + 1] = name
- 	end
-end
-
-local function removeDeleted (name)
-	local idx = hasDeleted(name)
-	
-	if idx > 0 then
-		table.remove(GlobalIgnoreDB.delList, idx)
-	end
-end
-
 local function ShowIgnoreList (param)
 	local days   = tonumber(param)
 	local sName  = ""
@@ -313,13 +377,9 @@ local function ShowIgnoreList (param)
 		end
 	
 		if days > 0 then
-		
 			ok = daysFromToday(GlobalIgnoreDB.dateList[key]) >= days
-			
 		elseif sName ~= "" then
-		
 			ok = (type == "N" and sName == "Npc") or (type == "P" and isServerMatch(sName, getServer(value))) or (type == "S" and isServerMatch(sName, value))
-
 		end
 		
 		if ok then
@@ -344,16 +404,24 @@ function ResetSpamFilters()
 	GlobalIgnoreDB.filterDesc   = {}
 	GlobalIgnoreDB.filterCount  = {}
 	GlobalIgnoreDB.filterActive = {}
+	GlobalIgnoreDB.filterID		= {}
 	
 	GlobalIgnoreDB.invertSpam = false
 	GlobalIgnoreDB.spamFilter = true
 	GlobalIgnoreDB.autoUpdate = true
 	
 	for count = 1, #filterDefDesc do
-		GlobalIgnoreDB.filterDesc[count]  = filterDefDesc[count]
-		GlobalIgnoreDB.filterList[count]  = filterDefFilter[count]
-		GlobalIgnoreDB.filterActive[count] = filterDefActive[count]		
-		GlobalIgnoreDB.filterCount[count] = 0
+		GlobalIgnoreDB.filterDesc[count]	= filterDefDesc[count]
+		GlobalIgnoreDB.filterList[count]	= filterDefFilter[count]
+		GlobalIgnoreDB.filterActive[count]	= filterDefActive[count]		
+		GlobalIgnoreDB.filterID[count]		= filterDefID[count]
+		GlobalIgnoreDB.filterCount[count]	= 0
+	end
+end
+
+local function ResetBlizzardIgnore()
+	for count = 1, C_FriendList.GetNumIgnores() do
+		BlizzardDelIgnoreByIndex(count)
 	end
 end
 
@@ -385,11 +453,19 @@ local function ResetIgnoreDB()
 		filterCount		= {},
 		filterDesc		= {},
 		filterList		= {},
+		filterID		= {},
 		skipGuild		= true,
 		skipParty		= false,
 		skipPrivate		= true,
+		skipYourself	= false,
 		showIgnoreDebug = false,
-		showWarning     = true
+		showWarning     = false,
+		useUnitHacks	= true,
+		useLFGHacks		= true,
+		ignoreResponse	= true,
+		frameStrata		= 3,
+		floodFilter		= 0, -- 0=None, 1=Name+Server+Message, 2=Message
+		showDeclines	= true
 	}
 	
 	GlobalIgnoreImported = false
@@ -437,6 +513,8 @@ function SyncIgnoreList (silent)
 		return
 	end
 	
+	GIL_InSync = true
+	
 	-- import ignore list if first time sync
 	
 	if GlobalIgnoreImported == nil or GlobalIgnoreImported ~= true then
@@ -455,7 +533,9 @@ function SyncIgnoreList (silent)
 			
 			if name ~= nil then
 			
-				if removeServer(name, true) ~= UNKNOWN then
+				local tmp = removeServer(name, true)
+				
+				if (tmp ~= "") and (tmp ~= UNKNOWN) then
 				
 					name = Proper(addServer(name))
 
@@ -475,12 +555,18 @@ function SyncIgnoreList (silent)
 		GlobalIgnoreImported = true
 	end	
 	
-	-- first remove expired entries
+	-- first remove expired entries and fix any detected broken entries
 	
 	local count = 0
-	
+		
 	while count < #GlobalIgnoreDB.dateList do
 		count = count + 1
+		
+		local tmp = removeServer(GlobalIgnoreDB.ignoreList[count], true)
+		if tmp == "" then
+			debugMsg ("Blank character name found in position " .. count);
+			RemoveFromList(count)
+		end
 		
 		if GlobalIgnoreDB.expList[count] > 0 and daysFromToday(GlobalIgnoreDB.dateList[count]) >= GlobalIgnoreDB.expList[count] then
 			local name = addServer(GlobalIgnoreDB.ignoreList[count])		
@@ -494,11 +580,19 @@ function SyncIgnoreList (silent)
 	
 	for count = 1, C_FriendList.GetNumIgnores() do
 	
-		local name       = addServer(C_FriendList.GetIgnoreName(count))
 		local skipRemove = false
-		local globIdx	 = hasGlobalIgnored(name)
-	
-		if name ~= nil then
+		local name       = C_FriendList.GetIgnoreName(count)
+
+		if (name == "") then
+			debugMsg("Removing blank name on Blizzard ignore list")
+			BlizzardDelIgnoreByIndex(count)
+		end
+		
+		if (name ~= nil and name ~= "" and name ~= UNKNOWN) then
+			name = Proper(addServer(name))
+			
+			local globIdx = hasGlobalIgnored(name)
+			
 			if globIdx == 0 then
 				if GlobalIgnoreDB.trackChanges == true then
 			
@@ -547,21 +641,6 @@ function SyncIgnoreList (silent)
 		end	
 	end
 
---	local ignoreCount = C_FriendList.GetNumIgnores()
---	
-	-- if ignore list is larger than our max we must remove players until it gets to max
-	
---	if ignoreCount > maxIgnoreSize then				
---		if ignoreCount > maxIgnoreSize then
---			local name = C_FriendList.GetIgnoreName(ignoreCount)
---			print("DEBUG Reducing Max account ignore: "..name)
---			BlizzardDelIgnore(ignoreCount)
---			print("DEBUG Readding to global ignore")
---			AddIgnore(name, true)
---			ignoreCount = C_FriendList.GetNumIgnores()
---		end
---	end
-
 	-- move qualified players to account wide ignore if there is room for it
 
 	local ignoreCount = C_FriendList.GetNumIgnores()
@@ -576,10 +655,8 @@ function SyncIgnoreList (silent)
 				
 				--print("DEBUG processing: ".. name .. " ignored? ".. hasIgnored(name));
 				
-				if hasIgnored(name) == 0 then
-					-- should we add an option to not always samefaction sync?
-					
-					local ok = (GlobalIgnoreDB.factionList[key] == faction)
+				if hasIgnored(name) == 0 then					
+					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
 
 					if ok then
 						ok = (isServerMatch(serverName, getServer(name))) or (GlobalIgnoreDB.sameserver == false)
@@ -607,10 +684,11 @@ function SyncIgnoreList (silent)
 		end
 	end	
 
+	GIL_InSync = false
 	GIL_SyncOK = true
 end
 
-local function PruneIgnoreList (days, doit)
+function PruneIgnoreList (days, doit)
 
 	if days == nil or days <= 0 then		
 		return 0
@@ -651,62 +729,87 @@ local function ApplicationStartup(self)
 	if GIL_Loaded == true or safeToLoad == false then
 		return
 	end
-	
+			
 	ShowMsg(L["LOAD_1"])
-	
+
 	-- Set filter defaults
 	
 	filterDefDesc[#filterDefDesc + 1]     = "Filter \"Anal\" Spammers"
 	filterDefFilter[#filterDefFilter + 1] = "([word=anal] or [contains=analan]) and ([link] or [words=2])"
 	filterDefActive[#filterDefActive + 1] = true
+	filterDefID[#filterDefID + 1]     = "GIL0001"
 
 	filterDefDesc[#filterDefDesc + 1]     = "Filter Thunderfury linking"
 	filterDefFilter[#filterDefFilter + 1] = "[item=19019]"
 	filterDefActive[#filterDefActive + 1] = true
+	filterDefID[#filterDefID + 1]     = "GIL0002"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Gold Spam #1"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=.c0m] or [contains=.c.0.m] or [contains=,com] or ([contains=.com] and ([contains=code] or [contains=usd] or [contains=+15]))"	
-	filterDefActive[#filterDefActive + 1] = true
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Mythic+ Sellers"
+	filterDefFilter[#filterDefFilter + 1] = "([contains=WTS] or [word=selling]) and ([contains=m+] or [contains=boost] or [contains=carry] or [contains=mythic] or [contains=gold\\ only])"
+	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0003"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Gold Spam #2"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=░] or [contains=▒] or [contains=▓] or [contains=█]) and ([contains=wts] or [contains=sell] or [contains=gold] or [contains=share]))"
-	filterDefActive[#filterDefActive + 1] = true
-
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Gold Spam #3"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=deliver] or [contains=delivery] or [contains=gold] or [contains=delievery] or [contains=sale]) and ([contains=.com] or [contains=,com] or [contains=c0m])"
-	filterDefActive[#filterDefActive + 1] = true
-
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Gold Spam #4"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=wts] or [contains=sell]) and [contains=share] and ([contains=account] or [contains=acc]))"
-	filterDefActive[#filterDefActive + 1] = true
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Tradeskill Sellers"
+	filterDefFilter[#filterDefFilter + 1] = "([contains=LFW] or [word=trade] or [contains=order] or [contains=tip] or [contains=%] or [contains=max] or [word=free] or [contains=craft] or [word=mats] or [contains=pay]) and ([trade] or [item])"
+	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0013"
+	
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Power Leveling Sellers"
+	filterDefFilter[#filterDefFilter + 1] = "([contains=wts] or [contains=service] or [contains=sell] or [word=fast] or [contains=afk]) and (([contains=power] or [contains=pwr]) and ([contains=level] or [contains=lvl]))"
+	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0014"
 	
 	filterDefDesc[#filterDefDesc + 1]     = "Filter Guild Recruitment"
-	filterDefFilter[#filterDefFilter + 1] = "(([contains=<] and [contains=>]) or ([contains=\\[] and [contains=\\]]) or ([contains=\\(] and [contains=\\)])) and ([contains=recruit] or [contains=progress] or [contains=raid] or [contains=guild] or [contains=seek] or [contains=mythic])"
+	--filterDefFilter[#filterDefFilter + 1] = "(([contains=<] and [contains=>]) or ([contains=\\[] and [contains=\\]]) or ([contains=\\(] and [contains=\\)])) and ([contains=recruit] or [contains=progress] or [contains=raid] or [contains=guild] or [contains=seek] or [contains=mythic])"
+	filterDefFilter[#filterDefFilter + 1] = "(([guild] or ([contains=<] and [contains=>]) or ([contains=\\[] and [contains=\\]]) or ([contains=\\(] and [contains=\\)])) and ([contains=recruit] or [contains=progress] or [contains=raid] or [contains=guild] or [contains=seek] or [contains=mythic])) or ([contains=guild] and [contains=recruit])"
 	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0008"
 
 	filterDefDesc[#filterDefDesc + 1]     = "Filter Community Recruitment"
 	filterDefFilter[#filterDefFilter + 1] = "[community]"
 	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0009"
 
 	filterDefDesc[#filterDefDesc + 1]     = "Filter WTS"
 	filterDefFilter[#filterDefFilter + 1] = "[contains=WTS] or [contains=WTB]"
 	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0010"
 
 	filterDefDesc[#filterDefDesc + 1]     = "Filter Chinese/Korean/Japanese"
 	filterDefFilter[#filterDefFilter + 1] = "[nonlatin]"
 	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0011"
 
 	filterDefDesc[#filterDefDesc + 1]     = "Filter American Politics"
 	filterDefFilter[#filterDefFilter + 1] = "[contains=trump] or [contains=communist] or [contains=communism] or [word=president] or [contains=biden] or [word=hillary] or [word=hilary] or [contains=democrat] or [contains=republican] or [contains=liberals] or [word=maga] or [word=libs] or [contains=conservatives] or [contains=libtard] or [word=pelosi] or [word=epstein] or [word=AOC] or [word=putin] or [contains=right\\ wing] or [word=dems] or [word=socialism]"
 	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0012"
+	
+	-- When adding new defaults, make sure to assign a unique filter ID that has never been used before
 
 	faction = UnitFactionGroup("player")
 		
 	if GlobalIgnoreDB == nil then	
-		ResetIgnoreDB()	
+		ResetIgnoreDB()
 	end
 	
 	-- set missing defaults or upgrade if needed
+
+	if GlobalIgnoreDB.sameserver == nil then
+		GlobalIgnoreDB.sameserver = true
+	end
+
+	if GlobalIgnoreDB.samefaction == nil then
+		GlobalIgnoreDB.samefaction = true
+	end
+
+	if GlobalIgnoreDB.chatmsg == nil then
+		GlobalIgnoreDB.chatmsg = true
+	end
+	
+	if GlobalIgnoreDB.showDeclines == nil then
+		GlobalIgnoreDB.showDeclines = true
+	end
 	
 	if GlobalIgnoreDB.showWarning == nil then
 		GlobalIgnoreDB.showWarning = true
@@ -726,6 +829,14 @@ local function ApplicationStartup(self)
 
 	if GlobalIgnoreDB.skipGuild == nil then
 		GlobalIgnoreDB.skipGuild = true
+	end
+
+	if GlobalIgnoreDB.skipYourself == nil then
+		GlobalIgnoreDB.skipYourself = false
+	end
+	
+	if GlobalIgnoreDB.floodFilter == nil then
+		GlobalIgnoreDB.floodFilter = 0
 	end
 	
 	if GlobalIgnoreDB.filterTotal == nil then
@@ -796,6 +907,22 @@ local function ApplicationStartup(self)
 		end
 	end
 	
+	if GlobalIgnoreDB.useUnitHacks == nil then
+		GlobalIgnoreDB.useUnitHacks = true
+	end
+	
+	if GlobalIgnoreDB.useLFGHacks == nil then
+		GlobalIgnoreDB.useLFGHacks = true
+	end
+	
+	if GlobalIgnoreDB.ignoreResponse == nil then
+		GlobalIgnoreDB.ignoreResponse = true
+	end
+
+	if GlobalIgnoreDB.frameStrata == nil then
+		GlobalIgnoreDB.frameStrata = 3
+	end
+
 	if GlobalIgnoreDB.syncList then
 		GlobalIgnoreDB.syncList = nil
 	end
@@ -831,45 +958,68 @@ local function ApplicationStartup(self)
 			GlobalIgnoreDB.filterActive[count] = true
 		end
 	end
+	
+	if GlobalIgnoreDB.filterID == nil then
+		GlobalIgnoreDB.filterID = {}
+		
+		for count = 1, #GlobalIgnoreDB.filterDesc do
+			GlobalIgnoreDB.filterID[count] = ""
+		
+			for count2 = 1, #filterDefDesc do
+				if GlobalIgnoreDB.filterDesc[count] == filterDefDesc[count2] then
+					GlobalIgnoreDB.filterID[count] = filterDefID[count2]
+				end
+			end
+		end
+	end
 
 	loadedTime = GetTime()
 		
-	SyncIgnoreList(GlobalIgnoreDB.chatmsg == nil or GlobalIgnoreDB.chatmsg == false)
+	SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 		
 	GIL_Loaded = true
+	
+	GIL_HookFunctions()
 	
 	self:UnregisterEvent("IGNORELIST_UPDATE")
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 	self:UnregisterEvent("ADDON_LOADED")
 	
-	-- Synchronize spam filters with defaults, if enabled
-
 	if GlobalIgnoreDB.autoUpdate == true then
 	
+		-- Add new and update existing default chat filters, if enabled
+
 		for count = 1, #filterDefDesc do
-		
-			local found = false
-		
-			for count2 = 1, #GlobalIgnoreDB.filterDesc do
-			
-				if GlobalIgnoreDB.filterDesc[count2] == filterDefDesc[count] then
-					found = true
-					
-					GlobalIgnoreDB.filterList[count2] = filterDefFilter[count]
-					
-					break
-				end
-			end
-			
-			if found == false then
-				ShowMsg("Adding new spam filter: " .. filterDefDesc[count])
+			local found = hasFilterID(filterDefID[count])
+	
+			if (found == 0) then
+				ShowMsg (format(L["SYNC_3"], filterDefDesc[count]))
+	
+				GlobalIgnoreDB.filterDesc[#GlobalIgnoreDB.filterDesc + 1]		= filterDefDesc[count]
+				GlobalIgnoreDB.filterList[#GlobalIgnoreDB.filterList + 1]		= filterDefFilter[count]
+				GlobalIgnoreDB.filterActive[#GlobalIgnoreDB.filterActive + 1]	= filterDefActive[count]
+				GlobalIgnoreDB.filterCount[#GlobalIgnoreDB.filterCount + 1]		= 0
+				GlobalIgnoreDB.filterID[#GlobalIgnoreDB.filterID + 1]			= filterDefID[count]
+			elseif GlobalIgnoreDB.filterDesc[found] ~= filterDefDesc[count] or GlobalIgnoreDB.filterList[found] ~= filterDefFilter[count] then
+				ShowMsg (format(L["SYNC_5"], filterDefDesc[count]))
 				
-				GlobalIgnoreDB.filterDesc[#GlobalIgnoreDB.filterDesc + 1]     = filterDefDesc[count]
-				GlobalIgnoreDB.filterList[#GlobalIgnoreDB.filterList + 1]     = filterDefFilter[count]
-				GlobalIgnoreDB.filterActive[#GlobalIgnoreDB.filterActive + 1] = filterDefActive[count]
-				GlobalIgnoreDB.filterCount[#GlobalIgnoreDB.filterCount + 1]   = 0
+				GlobalIgnoreDB.filterDesc[found] = filterDefDesc[count]
+				GlobalIgnoreDB.filterList[found] = filterDefFilter[count]
 			end
-		end	
+		end
+		
+		-- Remove any old filters that are no longer used as defaults
+		
+		count = 1
+		
+		while (count < #GlobalIgnoreDB.filterID) do
+			if (isDefFilterID(GlobalIgnoreDB.filterID[count]) == 0) then
+				ShowMsg (format(L["SYNC_4"], GlobalIgnoreDB.filterDesc[count]))
+				RemoveChatFilter(count)
+			else
+				count = count + 1
+			end
+		end
 	end
 end
 
@@ -941,9 +1091,25 @@ local function EventHandler (self, event, sender, ...)
 		sender = addServer(sender)
 
 		if hasGlobalIgnored(sender) > 0 then
-			DeclineGroup()			
-			ShowMsg("Automatically declined invite from " .. sender)
+			DeclineGroup()
+			if GlobalIgnoreDB.showDeclines == true then
+				ShowMsg (format(L["MSG_2"], sender))
+			end
+
 			StaticPopup_Hide("PARTY_INVITE")
+		end
+		
+		return
+	end
+	
+	if event == "GUILD_INVITE_REQUEST" and GIL_Loaded == true then
+		sender = addServer(sender)
+		
+		if hasGlobalIgnored(sender) > 0 then
+			DeclineGuild()
+			if GlobalIgnoreDB.showDeclines == true then
+				ShowMsg (format(L["MSG_4"], sender))
+			end
 		end
 		
 		return
@@ -954,7 +1120,9 @@ local function EventHandler (self, event, sender, ...)
 		
 		if hasGlobalIgnored(sender) > 0 then
 			CancelDuel()
-			ShowMsg("Automatically declined duel from " .. sender)
+			if GlobalIgnoreDB.showDeclines == true then
+				ShowMsg (format(L["MSG_3"], sender))
+			end
 		end
 		
 		return
@@ -993,7 +1161,7 @@ end
 -- SPAM FILTER ENGINE --
 ------------------------
 
-function filterComplex (filterStr, chatStr, chNum)
+function filterComplex (filterStr, chatStr, chNumber, chName)
 	-- true=should be filtered
 	-- chatStr should be convered to all lower
 	
@@ -1012,21 +1180,37 @@ function filterComplex (filterStr, chatStr, chNum)
 	local icons     = 0		
 	local pos1
 	
-	--print("Start="..gsub(chatStr, "\124", "\124\124"))
-
+	--print("DEBUG Start="..gsub(chatStr, "\124", "\124\124"))
+	
 	repeat
 		pos1 = find(chatStr, "|htalent:", 1, true)
-		
 		if not pos1 then break end
+		
+		pos2 = find(chatStr, "|h|r", pos1 + 9, true)
+		if not pos2 then break end
 		
 		talentID[#talentID + 1] = sub(chatStr, pos1 + 9, find(chatStr, "[", pos1 + 9, true) - 1)
 		
-		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, find(chatStr, "|h|r", pos1 + 9, true) + 4, -1)
+		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos2 + 4, -1)
+	until false
+	
+	repeat
+		pos1 = find(chatStr, "|cniq", 1, true)
+		if not pos1 then break end
+		
+		pos2 = find(chatStr, "item:", pos1+6, true)
+		if not pos2 then break end
+		
+		pos3 = find(chatStr, "|r", pos2, true)
+		if not pos3 then break end
+		
+		itemID[#itemID + 1] = sub(chatStr, pos2 + 5, find(chatStr, ":", pos2 + 5) - 1)
+
+		chatStr = sub(chatStr, 1, pos1 - 1) .. sub(chatStr, pos3 + 2)
 	until false
 	
 	repeat
 		pos1 = find(chatStr, "|c", 1, true)
-		
 		if not pos1 then break end
 		
 		chatStr = sub(chatStr, 1, pos1 - 1) .. sub(chatStr, pos1 + 10, -1)
@@ -1034,44 +1218,57 @@ function filterComplex (filterStr, chatStr, chNum)
 	
 	repeat
 		pos1 = find(chatStr, "|hbattlepet:", 1, true)
-		
 		if not pos1 then break end
+		
+		pos2 = find(chatStr, "|h|r", pos1 + 12, true)
+		if not pos2 then break end
 		
 		petID[#petID + 1] = sub(chatStr, pos1 + 12, find(chatStr, ":", pos1+13, true) - 1)
 		
-		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, find(chatStr, "|h|r", pos1 + 12, true) + 4, -1)
+		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos2 + 4, -1)
 	until false
-
+	
+	-- Is this still needed?
 	repeat
 		pos1 = find(chatStr, "|hitem:", 1, true)
-		
 		if not pos1 then break end
+		
+		pos2 = find(chatStr, "|h|r", pos1 + 8, true) or find(chatStr, "|r|h", pos1 + 8, true)
+		if not pos2 then break end
 		
 		itemID[#itemID + 1] = sub(chatStr, pos1 + 7, (find(chatStr, ":", pos1 + 7, true) or (find(chatStr, "[", pos1 + 8, true))) - 1)
 		
-		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, (find(chatStr, "|h|r", pos1 + 8, true) or (find(chatStr, "|r|h", pos1 + 8, true))) + 4, -1)	
+		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos2 + 4, -1)	
 	until false
 	
 	repeat
 		pos1 = find(chatStr, "|hspell:", 1, true)
-		
 		if not pos1 then break end
+
+		pos2 = find(chatStr, "|h|r", pos1 + 8, true)
+		if not pos2 then break end
 		
-		spellID[#spellID + 1] = sub(chatStr, pos1 + 8, find(chatStr, ":", pos1 + 9, true) - 1, true)
+		pos3 = find(chatStr, ":", pos1 + 9, true)
+		if not pos3 then break end
 		
-		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, find(chatStr, "|h|r", pos1 + 8, true) + 4, -1)
+		spellID[#spellID + 1] = sub(chatStr, pos1 + 8, pos3 - 1, true)
+--		spellID[#spellID + 1] = sub(chatStr, pos1 + 8, find(chatStr, ":", pos1 + 9, true) - 1, true)
+		
+		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos2 + 4, -1)
 	until false
 
 	repeat
 		pos1 = find(chatStr, "|hachievement:", 1, true)
-		
 		if not pos1 then break end
+		
+		pos2 = find(chatStr, "|h|r", pos1 + 14, true)
+		if not pos2 then break end
 
 		achieveID[#achieveID + 1] = sub(chatStr, pos1 + 14, find(chatStr, ":", pos1 + 15, true) - 1, true)
 		
-		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, find(chatStr, "|h|r", pos1 + 14, true) + 4, -1)
+		chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos2 + 4, -1)
 	until false
-
+	
 	repeat
 		pos1 = find(chatStr, "{rt%d}")
 		
@@ -1079,83 +1276,52 @@ function filterComplex (filterStr, chatStr, chNum)
 			icons   = icons + 1
 			chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 5, -1)
 		else
-		
 			pos1 = find(chatStr, "{x}", 1, true)
-			
-			if pos1 then
-			
+			if pos1 then		
 				icons   = icons + 1
 				chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 3, -1)
-				
 			else
-			
 				pos1 = find(chatStr, "{star}", 1, true)
-		
 				if pos1 then
-				
 					icons   = icons + 1
 					chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 6, -1)
-					
 				else
-				
 					pos1 = find(chatStr, "{coin}", 1, true)
-		
 					if pos1 then
-				
 						icons   = icons + 1
 						chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 6, -1)
-					
-					else		
-
+					else
 						pos1 = find(chatStr, "{moon}", 1, true)
-		
 						if pos1 then
-				
 							icons   = icons + 1
 							chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 6, -1)
-						
 						else		
-
 							pos1 = find(chatStr, "{cross}", 1, true)
-			
 							if pos1 then
-				
 								icons   = icons + 1
 								chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 7, -1)
 							else
-							
 								pos1 = find(chatStr, "{skull}", 1, true)
-			
 								if pos1 then
-				
 									icons   = icons + 1
 									chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 7, -1)
-									
 								else
-
 									pos1 = find(chatStr, "{square}", 1, true)
-								
 									if pos1 then
 										icons   = icons + 1
 										chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 8, -1)
 									else
-
 										pos1 = find(chatStr, "{circle}", 1, true)
-								
 										if pos1 then
 											icons   = icons + 1
 											chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 8, -1)
 										else
-							
 											pos1 = find(chatStr, "{diamond}", 1, true)
-								
 											if pos1 then
 												icons   = icons + 1
 												chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 9, -1)
 											else
-				
 												pos1 = find(chatStr, "{triangle}", 1, true)
-								
 												if pos1 then
 													icons   = icons + 1
 													chatStr = sub(chatStr, 1, pos1 - 1) .. " " .. sub(chatStr, pos1 + 10, -1)
@@ -1173,7 +1339,15 @@ function filterComplex (filterStr, chatStr, chNum)
 			end		
 		end
 		
-	until false	
+	until false
+	
+	local hasGuild		= find(chatStr, "|hclubfinder:", 1, true)
+	local hasTrade		= find(chatStr, "|htrade:", 1, true)
+	local hasJournal	= find(chatStr, "|hjournal:", 1, true)
+	local hasMount		= find(chatStr, "|hmount:", 1, true)
+	local hasOutfit		= find(chatStr, "|houtfit:", 1, true)
+	
+	--print ("HasTrade=" .. (hasTrade or "nil"))
 
 	--print("After="..gsub(chatStr, "\124", "\124\124"))
 	
@@ -1206,11 +1380,11 @@ function filterComplex (filterStr, chatStr, chNum)
 		else
 			filterStr = "( " .. filterStr .. " )"
 		end
-		
-		--print ("DEBUG BEGIN ---")
-		--print ("DEBUG filterStr="..filterStr)
-		
+				
 		if filterStr ~= nil then
+
+			--print ("DEBUG BEGIN ---")
+			--print ("DEBUG filterStr="..filterStr)
 
 			local filterLen		= string.len(filterStr)
 			local filterPos		= 0	
@@ -1285,11 +1459,12 @@ function filterComplex (filterStr, chatStr, chNum)
 									
 					if token ~= "" then
 						--print("DEBUG tokenStart="..token)
-						tempPos = find(token, "=", 1, true)
+						tempPos = string.find(token, "=", 1, true)
 					
 						if tempPos then
-							tokenData = sub(token, tempPos+1, strlen(token)-1)
-							token	  = sub(token, 1, tempPos-1).."]"
+							--print("DEBUG has extra values "..tempPos)
+							tokenData = string.sub(token, tempPos+1, strlen(token)-1)
+							token	  = string.sub(token, 1, tempPos-1).."]"
 						else
 							tokenData = ""
 						end
@@ -1333,14 +1508,23 @@ function filterComplex (filterStr, chatStr, chNum)
 							else
 								result = result .. "F"									
 							end
+						elseif token == "[chname]" then
+							if chName then
+								chName = lower(chName)
+							else
+								chName = "none"
+							end
+							if chName == tokenData then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
 						elseif token == "[channel]" then
-							--print("DEBUG channel="..tostring(chNum))
-							if tonumber(tokenData) == chNum then
+							if tonumber(tokenData) == chNumber then
 								result = result .. "T"
 							else
 								result = result .. "F"
 							end								
-							--print("DEBUG done")
 						elseif token == "[words]" then
 							if tonumber(tokenData) == #chatData then
 								result = result .. "T"
@@ -1357,7 +1541,7 @@ function filterComplex (filterStr, chatStr, chNum)
 							else
 								found = false
 							
-							for count = 1, #itemID do
+								for count = 1, #itemID do
 									if tokenData == itemID[count] then
 										found = true
 										break
@@ -1456,12 +1640,41 @@ function filterComplex (filterStr, chatStr, chNum)
 							end
 						
 						elseif token == "[link]" then
-							if #achieveID > 0 or #spellID > 0 or #itemID > 0 or #talentID > 0 or #petID > 0 then
+							if #achieveID > 0 or #spellID > 0 or #itemID > 0 or #talentID > 0 or hasJournal or hasGuild or hasTrade or hasOutfit or #petID > 0 or hasMount then
 								result = result .. "T"
 							else
 								result = result .. "F"
 							end
-							
+						elseif token == "[trade]" then
+							if hasTrade then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
+						elseif token == "[guild]" then
+							if hasGuild then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
+						elseif token == "[outfit]" then
+							if hasOutfit then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
+						elseif token == "[journal]" then
+							if hasJournal then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
+						elseif token == "[mount]" then
+							if hasMount then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
 						elseif token == "[community]" then							
 							if find(chatStr, "|hclubticket:", 1, true) then
 								result = result .. "T"
@@ -1486,8 +1699,12 @@ function filterComplex (filterStr, chatStr, chNum)
 					token = token .. c
 				end
 			end
-					
+						
 			if lastFilterError == false then
+			
+				if gotPR == true then
+					result = result .. ")"
+				end
 			
 				local p1	= 0
 				local p2	= 0
@@ -1496,7 +1713,7 @@ function filterComplex (filterStr, chatStr, chNum)
 				local count
 				local chunk
 
-				--print ("DEBUG filterResult start=" .. data)
+				--print ("DEBUG filterResult start=" .. result)
 	
 				while find(result, "(", 1, true) do
 					p2   = 1
@@ -1586,25 +1803,54 @@ end
 
 --local lastMsg = ""
 
-local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5, chnum, chname, ...)
-
+local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5, chNumber, chName, t8, msgID, t10, t11, t12, ...)
+	
+--	print("DEBUG"..
+--		"\n\tFrom: "..(from or "nil")..
+--		"\n\tEvent: "..(event or "nil")..
+--		"\n\tChannel Number: "..chNumber..
+--		"\n\tChannel Name: "..chName..
+--		"\n\tMsg ID: "..msgID..
+--		"\n\tMsg: "..message..
+--		"\n\tT1:"..(t1 or "nil")..
+--		"\n\tT2:"..(t2 or "nil")..
+--		"\n\tT3:"..(t3 or "nil")..
+--		"\n\tT4:"..(t4 or "nil")..
+--		"\n\tT5:"..(t5 or "nil")..
+--		"\n\tT8:"..(t8 or "nil")..
+--		"\n\tT10:"..(t10 or "nil")..
+--		"\n\tT11:"..(t11 or "nil")..
+--		"\n\tT12:"..(t12 or "nil")..
+--		"\nEND"
+--	)
+	
 	--if lastMsg ~= message then	
-		--t = string.gsub(message, "|", "!")
-		--print ("chatMsg evt=" .. (event or "nil") .. " msg=".. (t or "nil") .. " from=" .. (from or "nil"))
-		--lastMsg = message
+	--	t = string.gsub(message, "|", "!")
+	--	print ("chatMsg evt=" .. (event or "nil") .. " msg=".. (t or "nil") .. " from=" .. (from or "nil"))
+	--	lastMsg = message
 	--end
 
-	if event == "CHAT_MSG_SYSTEM" then		
+	if event == "CHAT_MSG_SYSTEM" then
 		if message == ERR_IGNORE_FULL then
 			return true
 		end
-	
-		if doLoginIgnore == true then
-			if GetTime() - loadedTime > 90 then
-				doLoginIgnore = false
-			elseif message == ERR_IGNORE_NOT_FOUND or message == ERR_IGNORE_ALREADY_S then
+
+		if doLoginIgnore == true and (GetTime() - loadedTime > 90) then
+			doLoginIgnore = false
+		end
+				
+		if (doLoginIgnore == true) or (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+			if message == ERR_IGNORE_NOT_FOUND or message == ERR_FRIEND_ERROR then
 				return true
-			end		
+			end
+
+			if
+				string.find(message, string.gsub(ERR_IGNORE_ADDED_S, "%%s", ""), 1, true) or
+				string.find(message, string.gsub(ERR_IGNORE_REMOVED_S, "%%s", ""), 1, true) or
+				string.find(message, string.gsub(ERR_IGNORE_ALREADY_S, "%%s", ""), 1, true)
+			then
+				return true
+			end
 		end
 	end
 			
@@ -1666,7 +1912,9 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				local temp = from .. math.ceil(GetTime() - 0.5)
 				
 				if (temp ~= lastSentIgnore) then
-					SendChatMessage(L["MSG_1"], "WHISPER", nil, from)
+					if GlobalIgnoreDB.ignoreResponse == true then
+						SendChatMessage(L["MSG_1"], "WHISPER", nil, from)
+					end
 					lastSentIgnore = temp
 				end
 			end
@@ -1700,27 +1948,62 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				if (event == "CHAT_MSG_ACHIEVEMENT") or (event == "CHAT_MSG_GUILD_ACHIEVEMENT") then			
 					return false
 				end
-			
-				if lastFilterMsg ~= message then
-					lastFilterMsg = message
-					
-					message = string.lower(message)
-					
-					lastFilterResult, filterNum = filterComplex(nil, message, chnum)
 				
-					if lastFilterResult == true then
-						
-						if GlobalIgnoreDB.invertSpam == true then
-							lastFilterResult = false
-						else
-						
-							GlobalIgnoreDB.filterTotal	      = GlobalIgnoreDB.filterTotal + 1
-							GlobalIgnoreDB.filterCount[filterNum] = GlobalIgnoreDB.filterCount[filterNum] + 1
+				if GlobalIgnoreDB.skipYourself == true and from == playerName then
+					return false
+				end
+					
+				message = string.lower(message)
+				
+				if GlobalIgnoreDB.floodFilter > 0 and lastFilterMsgID ~= msgID then						
+					local text = ""
+
+					if GlobalIgnoreDB.floodFilter == 1 then
+						text = from .. message
+					else
+						text = message
+					end
+
+					if #gilFloodData > 0 then
+						for i = 1, #gilFloodData do
+							if gilFloodData[i] == text then
+								lastFilterMsgID = msgID
+								lastFilterResult = true
+								return true
+							end
 						end
-							
+
+						if (#gilFloodData > gilFloodSize) then
+							table.remove(gilFloodData, 1)
+						end
+					end
+
+					gilFloodData[#gilFloodData+1] = text
+				else
+					if lastFilterMsgID == msgID then
 						return lastFilterResult
 					end
-				else
+				end
+				
+				if chNumber == 0 then
+					chName = string.sub(event, 10, strlen(event))
+				end
+				
+				lastFilterMsgID = msgID
+					
+				lastFilterResult, filterNum = filterComplex(nil, message, chNumber, chName)
+				
+				if lastFilterResult == true then
+						
+					if GlobalIgnoreDB.invertSpam == true then
+						lastFilterResult = false
+					else
+						GlobalIgnoreDB.filterTotal				= GlobalIgnoreDB.filterTotal + 1
+						GlobalIgnoreDB.filterCount[filterNum]	= GlobalIgnoreDB.filterCount[filterNum] + 1
+							
+						GILUpdateChatCount()
+					end
+							
 					return lastFilterResult
 				end
 				
@@ -1729,7 +2012,6 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					
 					return true
 				end
-				
 			end
 		end
 	end		  	
@@ -1823,13 +2105,14 @@ function SlashCmdList.GIGNORE (msg)
 	end
 	
 	if args[1] == "test" then
-
+	
 	elseif args[1] == "clear" then
 	
 		if firstClear and args[2] ~= nil and args[2] == "confirm" then	
 			ResetIgnoreDB()
+			ResetBlizzardIgnore()
 			ShowMsg(L["CMD_2"])
-			SyncIgnoreList(GlobalIgnoreDB.chatmsg == nil or GlobalIgnoreDB.chatmsg == false)
+			--SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 			firstClear = false
 		else
 			ShowMsg("|cffff0000" .. L["CMD_1"])
@@ -1940,9 +2223,9 @@ function SlashCmdList.GIGNORE (msg)
 			end
 		end
 		
-	elseif args[1] == "gui" then	
+	elseif args[1] == "gui" or args[1] == "ui" then	
 	
-		GUI()
+		GIL_GUI()
 		
 	elseif args[1] == "sync" then
 	
@@ -2003,7 +2286,7 @@ end
 -- BLIZZARD FUNCTION HOOKS --
 -----------------------------
 
-BlizzardInviteUnit			= InviteUnit
+BlizzardInviteUnit			= C_PartyInfo.InviteUnit
 BlizzardAddIgnore			= C_FriendList.AddIgnore
 BlizzardDelIgnore			= C_FriendList.DelIgnore
 BlizzardDelIgnoreByIndex	= C_FriendList.DelIgnoreByIndex
@@ -2032,7 +2315,7 @@ StaticPopupDialogs["GIL_PARTYWARN"] = {
 	hideOnEscape	= true,
 }
 
-InviteUnit = function (name)
+C_PartyInfo.InviteUnit = function (name)
 
 	name = Proper(name)
 	
@@ -2046,6 +2329,12 @@ InviteUnit = function (name)
 end
 
 C_FriendList.AddIgnore = function(name, noNote)
+
+	local okDisplay = true
+	
+	if (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+		okDisplay = false
+	end
 
 	--print("DEBUG: Info sent to C_FriendList.AddIgnore name="..(name or "nil") .. " note="..(noNote or "nil"))
 	
@@ -2088,8 +2377,9 @@ C_FriendList.AddIgnore = function(name, noNote)
 	needSorted = true
 	name	   = Proper(addServer(name))
 	
-	if removeServer(name, true) == UNKNOWN then return end
-	
+	local tmp = removeServer(name, true)
+	if (tmp == "") or (tmp == UNKNOWN) then return end
+		
 	if Proper(addServer(UnitName("player"))) ~= name then
 	
 		local index = hasGlobalIgnored(name)
@@ -2102,15 +2392,19 @@ C_FriendList.AddIgnore = function(name, noNote)
 				nameUI = name				
 				StaticPopup_Show("GIL_REASON", nameUI)			
 			end
-			
-			ShowMsg(format(L["ADD_2"], name))
+
+			if okDisplay == true then 
+				ShowMsg(format(L["ADD_2"], name))
+			end
 			
 			if C_FriendList.GetNumIgnores() < maxIgnoreSize then
 				BlizzardAddIgnore(removeServer(name))
 			end
 		else
 			if hasIgnored(name) > 0 then
-				ShowMsg(format(L["ADD_1"], name))
+				if okDisplay == true then
+					ShowMsg(format(L["ADD_1"], name))
+				end
 			end
 
 			if C_FriendList.GetNumIgnores() < maxIgnoreSize then			
@@ -2118,13 +2412,15 @@ C_FriendList.AddIgnore = function(name, noNote)
 			end
 		end
 		
-		removeDeleted(name)
+		--removeDeleted(name)
 		
 		indentUI = 0
 		
 		GILUpdateUI()
 	else
-		ShowMsg(L["ADD_3"])
+		if okDisplay == true then
+			ShowMsg(L["ADD_3"])
+		end
 	end	
 end
 
@@ -2137,6 +2433,12 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 
 	--print ("DEBUG C_FriendList.DelIgnore idx="..(idxpos or "nil"))
 
+	local okDisplay = true
+	
+	if (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+		okDisplay = false
+	end
+	
 	local name = ""
 	
 	if isGIL then
@@ -2167,12 +2469,14 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 	
 --	if removeServer(name, true) ~= UNKNOWN then
 
-		addDeleted(name)
+		--addDeleted(name)
 	
 		local index = hasGlobalIgnored(name)
 
 		if index > 0 then
-			ShowMsg(format(L["REM_1"], name))
+			if okDisplay == true then
+				ShowMsg(format(L["REM_1"], name))
+			end
 		
 			RemoveFromList(index)		
 		
@@ -2188,7 +2492,8 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 		end
 --	end
 		
-	indentUI = 0
+	indentUI = 0	
+	GILUpdateUI()	
 end
 
 C_FriendList.AddOrDelIgnore = function(name)
@@ -2300,7 +2605,7 @@ C_FriendList.AddOrDelIgnore = function(name)
 end
 
 AddOrDelNPC = function (argStr)
-
+	
 	if tonumber(argStr) then
 	
 		local nIndex = tonumber(argStr)
@@ -2311,9 +2616,11 @@ AddOrDelNPC = function (argStr)
 			RemoveFromList(nIndex)
 		end
 	else
-				
-		argStr = (trim(Proper(argStr, true)) or "")
-	
+		
+		if argStr ~= "" then
+			argStr = (trim(Proper(argStr, true)) or "")
+		end
+		
 		if argStr == "" then
 			argStr = Proper(UnitName("target"), true)
 				
@@ -2384,6 +2691,7 @@ GILFRAME:RegisterEvent("IGNORELIST_UPDATE")
 GILFRAME:RegisterEvent("PARTY_INVITE_REQUEST")
 GILFRAME:RegisterEvent("DUEL_REQUESTED")
 GILFRAME:RegisterEvent("GROUP_ROSTER_UPDATE")
+GILFRAME:RegisterEvent("GUILD_INVITE_REQUEST")
 
 SLASH_GIGNORE1		= "/gignore"
 SLASH_GIGNORE2		= "/gi"
