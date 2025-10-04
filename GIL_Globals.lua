@@ -1,17 +1,24 @@
 -- WORK IN PROGRESS: Move everything to its own namespace
-
-GIL = {}
+local addonName, addon = ...
+-- get a reference to localization entries
+local L = addon.L
+-- use this array to share variables between addon files
+addon.V = {}
+local V = addon.V
+-- use this to share methods between addon files
+addon.M = {}
+local M = addon.M
 
 ----------------------
--- GLOBAL FUNCTIONS --
+-- SHARED FUNCTIONS --
 ----------------------
 
-function GILDUMP (o)
+function M.GILDUMP (o)
    if type(o) == 'table' then
       local s = '{ '
       for k,v in pairs(o) do
          if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. GILDUMP(v) .. ','
+         s = s .. '['..k..'] = ' .. M.GILDUMP(v) .. ','
       end
       return s .. '} '
    else
@@ -19,13 +26,14 @@ function GILDUMP (o)
    end
 end
 
-function GILDUMP2 (tbl, indent)
+function M.GILDUMP2 (tbl, indent)
   if not indent then indent = 0 end
+  local formatting
   for k, v in pairs(tbl) do
     formatting = string.rep("  ", indent) .. k .. ": "
     if type(v) == "table" then
       print(formatting)
-      GILDUMP2(v, indent+1)
+      M.GILDUMP2(v, indent+1)
     elseif type(v) == 'boolean' then
       print(formatting .. tostring(v))
 	elseif type(v) == 'function' then
@@ -36,14 +44,14 @@ function GILDUMP2 (tbl, indent)
   end
 end
 
-function trim (str)
+function M.trim (str)
 
 	local n = str:find"%S"
 	return n and str:match(".*%S", n) or ""
  
 end
 
-function dateToJulianDate (dateStr)
+function M.dateToJulianDate (dateStr)
 	
 	if dateStr == nil then
 		return 0
@@ -84,10 +92,10 @@ function dateToJulianDate (dateStr)
 	return calc2
 end
 
-function daysFromToday (dateStr)
+function M.daysFromToday (dateStr)
 
-	local addDate = dateToJulianDate(dateStr)
-	local today   = dateToJulianDate(date("%d %b %Y"))
+	local addDate = M.dateToJulianDate(dateStr)
+	local today   = M.dateToJulianDate(date("%d %b %Y"))
 	
 	if addDate == 0 then
 		return -1
@@ -101,7 +109,7 @@ function daysFromToday (dateStr)
 	end
 end
 
-function strDown (str)
+function M.strDown (str)
 
 	local len    = strlen(str)
 	local count  = 1
@@ -125,7 +133,7 @@ function strDown (str)
 	return res
 end
 
-function Proper (name, okSpaces)
+function M.Proper (name, okSpaces)
 
 	if name == nil then return nil end
 	if name == "" then return nil end
@@ -166,7 +174,7 @@ function Proper (name, okSpaces)
 	return res
 end
 
-function GetWord (str, wordnumber)
+function M.GetWord (str, wordnumber)
 
 	local len     = strlen(str)
 	local count   = 1
@@ -198,11 +206,11 @@ function GetWord (str, wordnumber)
 	return res
 end
 
-function prettyServer (origName)
+function M.prettyServer (origName)
 
 	if origName == nil then return nil end
 
-	name = origName
+	local name = origName
 
 	if name == "Aeriepeak" then name = "Aerie Peak"
 	elseif name == "Aggra(português)" then name = "Aggra (Português)"
@@ -382,7 +390,7 @@ function prettyServer (origName)
 	return name
 end
 
-function getServer (name, def)
+function M.getServer (name, def)
 
 	local index = string.find(name, "-", 1, true)
 	
@@ -390,10 +398,10 @@ function getServer (name, def)
 		return string.sub(name, index + 1, string.len(name))
 	end
 	
-	if def then return def else return serverName end
+	if def then return def else return V.serverName end
 end
 
-function removeServer (name, strict)
+function M.removeServer (name, strict)
 	
 	if name == nil then
 		return nil
@@ -408,9 +416,9 @@ function removeServer (name, strict)
 	end
 	
 	if index ~= nil then
-		local server = Proper(string.sub(name, index + 1, string.len(name)));
+		local server = M.Proper(string.sub(name, index + 1, string.len(name)));
 		
-		if strict == true or server == Proper(serverName) then
+		if strict == true or server == M.Proper(V.serverName) then
 			result = string.sub(name, 1, index - 1)
 		end
 	end
@@ -418,32 +426,31 @@ function removeServer (name, strict)
 	return result	
 end
 
-function addServer (name)
+function M.addServer (name)
 
 	if not name then return nil end
 
 	if string.find(name, "-", 1, true) == nil then
-		return name .. "-" .. serverName
+		return name .. "-" .. V.serverName
 	end
 	
 	return name
 end
 
 ----------------------
--- GLOBAL VARIABLES --
+-- SHARED VARIABLES --
 ----------------------
 
-_, L				= ...
-serverName			= Proper(GetRealmName())
-playerName			= addServer(GetUnitName("player"), true)
-wowIsERA			= false
-wowIsTBC			= false
-wowIsWrath			= false
-wowIsCata			= false
-wowIsMOP			= false
-wowIsRetail			= false
-wowLongName			= "Unknown"
-wowName				= wowLongName
+V.serverName		= M.Proper(GetRealmName())
+V.playerName		= M.addServer(GetUnitName("player"), true)
+V.wowIsERA			= false
+V.wowIsTBC			= false
+V.wowIsWrath		= false
+V.wowIsCata			= false
+V.wowIsMOP			= false
+V.wowIsRetail		= false
+V.wowLongName		= "Unknown"
+V.wowName				= V.wowLongName
 
 -- Color yellow: ffff0000
 -- Color white: ffffff00
@@ -456,40 +463,38 @@ wowName				= wowLongName
 local toc, toc, toc, toc = GetBuildInfo()
 
 if (toc >= 10000 and toc <= 19999) then
-	wowIsERA	= true
-	wowLongName	= "Classic Era"
-	wowName		= "Era"
+	V.wowIsERA	= true
+	V.wowLongName	= "Classic Era"
+	V.wowName		= "Era"
 elseif (toc >= 20000 and toc <= 29999) then
-	wowIsTBC	= true
-	wowLongName	= "The Burning Crusade"
-	wowName		= "TBC"
+	V.wowIsTBC	= true
+	V.wowLongName	= "The Burning Crusade"
+	V.wowName		= "TBC"
 elseif (toc >= 30000 and toc <= 39999) then
-	wowIsWrath	= true
-	wowLongName	= "Wrath of the Lich King"
-	wowName		= "WOTLK"
+	V.wowIsWrath	= true
+	V.wowLongName	= "Wrath of the Lich King"
+	V.wowName		= "WOTLK"
 elseif (toc >= 40000 and toc <= 49999) then
-	wowIsCata	= true
-	wowLongName	= "Cataclysm"
-	wowName		= "Cata"
+	V.wowIsCata	= true
+	V.wowLongName	= "Cataclysm"
+	V.wowName		= "Cata"
 elseif (toc >= 50000 and toc <= 59999) then
-	wowIsCata	= true
-	wowLongName	= "Mists of Pandaria"
-	wowName		= "MOP"
+	V.wowIsMOP	= true
+	V.wowLongName	= "Mists of Pandaria"
+	V.wowName		= "MOP"
 else
-	wowIsRetail = true
+	V.wowIsRetail = true
 end
-
--- Retail versions
 
 if (toc >= 100000 and toc < 109999) then
-	wowLongName = "Dragonflight"
-	wowName		= "DF"
+	V.wowLongName = "Dragonflight"
+	V.wowName		= "DF"
 elseif (toc >= 110000 and toc < 119999) then
-	wowLongName = "The War Within"
-	wowName		= "TWW"
+	V.wowLongName = "The War Within"
+	V.wowName		= "TWW"
 elseif (toc >= 120000 and toc < 129999) then
-	wowLongName = "Midnight"
-	wowName		= "MN"
+	V.wowLongName = "Midnight"
+	V.wowName		= "MN"
 end
 
-wowIsClassic = (wowIsRetail == false)
+V.wowIsClassic = (V.wowIsRetail == false)

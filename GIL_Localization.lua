@@ -1,4 +1,6 @@
-local _, L   = ...
+local addonName, addon = ...
+addon.L = {}
+local L = addon.L
 local locale = GetLocale()
 
 local function badString (L, key)
@@ -100,7 +102,7 @@ L["HELP_16"]	= "|cffffff00gui|cffffffff: Open GIL user interface"
 L["CHAT_1"]	= "WARNING: There are %d ignored player(s) in this group: |cffffff00%s"
 L["MSG_1"]	= "[Global Ignore List] You are being ignored."
 L["MSG_2"]	= "Automatically declined invite from %s"
-L["MSG_3"]	= "Automatically declined duel from %s"
+L["MSG_3"]	= "Automatically declined duel from %s" 
 L["MSG_4"]	= "Automatically declined guild invite from %s" 
 L["COL_1"]	= "Player Name"
 L["COL_2"]	= "Server Name"

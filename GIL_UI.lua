@@ -5,10 +5,13 @@
 -- first : X... - is move left
 -- second: Y... - is move down
 
-local _, L					= ...
+local addonName, addon 	= ...
+local L = addon.L -- localization entries
+local V = addon.V -- shared variables
+local M = addon.M -- shared methods
 
-needSorted					= true
-nameUI						= ""
+V.needSorted					= true
+V.nameUI							= ""
 
 local MainFrame				= nil
 local Tab1Frame				= nil
@@ -61,30 +64,30 @@ StaticPopupDialogs["GIL_REASON"] = {
 	button2        = L["BOX_5"],
   
 	OnShow = function(self)
-		if wowIsERA == true then
-			self.editBox:SetText(GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)])
+		if V.wowIsERA == true then
+			self.editBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
 			self.editBox:SetFocus()
 		else
-			self.EditBox:SetText(GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)])
+			self.EditBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
 			self.EditBox:SetFocus()
 		end
 	end,
 	OnAccept = function(self)
-		if wowIsERA == true then
-			GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)] = self.editBox:GetText()
+		if V.wowIsERA == true then
+			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.editBox:GetText()
 		else
-			GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)] = self.EditBox:GetText()
+			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.EditBox:GetText()
 		end
-		GILUpdateUI()
+		M.GILUpdateUI()
 	end,
 	EditBoxOnEnterPressed = function(self)
-		if wowIsERA == true then
-			GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)] = self:GetParent().editBox:GetText()
+		if V.wowIsERA == true then
+			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().editBox:GetText()
 		else
-			GlobalIgnoreDB.notes[hasAnyIgnored(nameUI)] = self:GetParent().EditBox:GetText()
+			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().EditBox:GetText()
 		end
 		self:GetParent():Hide()
-		GILUpdateUI()
+		M.GILUpdateUI()
 	end,
 	EditBoxOnEscapePressed = function(self)
 		self:GetParent():Hide()
@@ -93,8 +96,8 @@ StaticPopupDialogs["GIL_REASON"] = {
 
 local function setExpire (text)
 	if tonumber(text) then
-		GlobalIgnoreDB.expList[hasAnyIgnored(nameUI)] = tonumber(text)	
-		GILUpdateUI()
+		GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)] = tonumber(text)
+		M.GILUpdateUI()
 	end	
 end
 
@@ -106,7 +109,7 @@ StaticPopupDialogs["GIL_CONFIRMPRUNE"] = {
 	button2        = L["BOX_5"],
   
 	OnAccept = function(self, data)
-		PruneIgnoreList(data, true);
+		M.PruneIgnoreList(data, true);
 	end,
 	EditBoxOnEnterPressed = function(self, data)
 		self:GetParent():Hide()
@@ -126,7 +129,7 @@ StaticPopupDialogs["GIL_PRUNE"] = {
 	button2        = L["BOX_5"],
   
 	OnShow = function(self)
-		if wowIsERA == true then
+		if V.wowIsERA == true then
 			self.editBox:SetText("365")
 			self.editBox:SetFocus()
 		else
@@ -136,13 +139,13 @@ StaticPopupDialogs["GIL_PRUNE"] = {
 	end,
 	OnAccept = function(self)
 		local d = nil
-		if wowIsERA == true then
+		if V.wowIsERA == true then
 			d = tonumber(self.editBox:GetText());
 		else
 			d = tonumber(self.EditBox:GetText());
 		end
 		if (d and d > 0) then
-			local c = PruneIgnoreList(d, false);
+			local c = M.PruneIgnoreList(d, false);
 			local f = StaticPopup_Show("GIL_CONFIRMPRUNE", c);
 			f.data = d;
 		end		
@@ -166,23 +169,23 @@ StaticPopupDialogs["GIL_EXPIRE"] = {
 	button2        = L["BOX_5"],
   
 	OnShow         = function(self)
-		if wowIsERA == true then
-			self.editBox:SetText(GlobalIgnoreDB.expList[hasAnyIgnored(nameUI)])
+		if V.wowIsERA == true then
+			self.editBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
 			self.editBox:SetFocus()
 		else
-			self.EditBox:SetText(GlobalIgnoreDB.expList[hasAnyIgnored(nameUI)])
+			self.EditBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
 			self.EditBox:SetFocus()
 		end
 	end,
 	OnAccept       = function(self)
-		if wowIsERA == true then
+		if V.wowIsERA == true then
 			setExpire(self.editBox:GetText())
 		else
 			setExpire(self.EditBox:GetText())
 		end
 	end,
 	EditBoxOnEnterPressed = function(self)
-		if wowIsERA == true then
+		if V.wowIsERA == true then
 			setExpire(self:GetParent().editBox:GetText())
 		else
 			setExpire(self:GetParent().EditBox:GetText())
@@ -202,8 +205,8 @@ StaticPopupDialogs["GIL_RESETFILTER"] = {
 	button1        = L["BOX_4"],
 	button2        = L["BOX_5"],
 	OnAccept       = function(self)
-		ResetSpamFilters()
-		FilterListDrawUpdate(FilterScrollFrame)
+		M.ResetSpamFilters()
+		M.FilterListDrawUpdate(FilterScrollFrame)
 	end,	
 	EditBoxOnEscapePressed = function(self)
 		self:GetParent():Hide()
@@ -222,8 +225,8 @@ StaticPopupDialogs["GIL_REMOVEFILTER"] = {
 			return
 		end
 		
-		RemoveChatFilter(FilterScrollSelect)			
-		FilterListDrawUpdate(FilterScrollFrame)		
+		M.RemoveChatFilter(FilterScrollSelect)
+		M.FilterListDrawUpdate(FilterScrollFrame)
 	end,	
 	EditBoxOnEscapePressed = function(self)
 		self:GetParent():Hide()
@@ -239,18 +242,18 @@ local function ButtonIgnoreRemove()
 	local idx     = IgnoreScrollIndex[IgnoreScrollSelect]
 	local typeStr = GlobalIgnoreDB.typeList[idx]
 
-	needSorted = true
+	V.needSorted = true
 
 	--print("DEBUG ButtonIgnoreRemove")
 	
 	if typeStr == "player" then
 		C_FriendList.DelIgnore(idx, true)
 	elseif typeStr == "npc" then
-		AddOrDelNPC(idx)
-		GILUpdateUI()
+		M.AddOrDelNPC(idx)
+		M.GILUpdateUI()
 	elseif typeStr == "server" then
-		AddOrDelServer(idx)
-		GILUpdateUI()
+		M.AddOrDelServer(idx)
+		M.GILUpdateUI()
 	end
 end
 
@@ -258,7 +261,7 @@ end
 -- CHAT FILTER SCROLLER --
 --------------------------
 
-function FilterListDrawUpdate (self)
+function M.FilterListDrawUpdate (self)
 
 	FauxScrollFrame_Update(self, #GlobalIgnoreDB.filterList, BUTTON_TOTAL, BUTTON_HEIGHT)
 	
@@ -270,7 +273,7 @@ function FilterListDrawUpdate (self)
 	
 	local offset = FauxScrollFrame_GetOffset(self)
 	local index  = 0
-	
+	local pName = ""
 	for count = 1, BUTTON_TOTAL do
 		index = count + offset
 				
@@ -309,12 +312,12 @@ local function CreateFilterButtons()
 	
 	for count = 1, BUTTON_TOTAL do
 	
-		if wowIsClassic == true then
+		if V.wowIsClassic == true then
 			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
 		else
 			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "IgnoreListButtonTemplate")
 		end
-		
+	
 		if count == 1 then
 			FilterScrollButtons[count]:SetPoint("TOPLEFT", FilterScrollFrame, -1, 0)
 		else
@@ -323,7 +326,7 @@ local function CreateFilterButtons()
 
 		FilterScrollButtons[count]:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
 		FilterScrollButtons[count]:RegisterForClicks("LeftButtonUp")
-		FilterScrollButtons[count]:SetScript("OnClick", FilterScrollClick)
+		FilterScrollButtons[count]:SetScript("OnClick", M.FilterScrollClick)
 
 		-- set name style
 		FilterScrollButtons[count].name:SetWidth(COL_DESC)		
@@ -349,10 +352,10 @@ local function CreateFilterButtons()
 		FilterScrollButtons[count].filter:SetWordWrap(false)
 	end
 	
-	FilterListDrawUpdate(FilterScrollFrame)
+	M.FilterListDrawUpdate(FilterScrollFrame)
 end
 
-function FilterScrollDoubleClick()
+function M.FilterScrollDoubleClick()
 
 	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
 	
@@ -366,16 +369,16 @@ function FilterScrollDoubleClick()
 	end
 end
 
-function FilterScrollClick(self, button, down)
+function M.FilterScrollClick(self, button, down)
 
 	if down == true then return end
 	
 	if FilterScrollSelect == self:GetID() and button == "LeftButton" then
-		FilterScrollDoubleClick()
+		M.FilterScrollDoubleClick()
 		return
 	elseif FilterScrollSelect ~= self:GetID() then
 		FilterScrollSelect = self:GetID()
-		FilterListDrawUpdate(FilterScrollFrame)
+		M.FilterListDrawUpdate(FilterScrollFrame)
 	end
 end
 
@@ -412,7 +415,7 @@ local function IgnoreListDrawUpdate (self)
 			temp  = string.find(pName, "-", 1, true)
 			
 			if temp then
-				pServer = prettyServer(string.sub(pName, temp + 1, string.len(pName)))
+				pServer = M.prettyServer(string.sub(pName, temp + 1, string.len(pName)))
 				pName   = string.sub(pName, 1, temp - 1)
 			else
 				pServer = "All"
@@ -430,12 +433,12 @@ local function IgnoreListDrawUpdate (self)
 				pType = "|cffffff99NPC"
 			else
 				pType = "|cffff66ccServer"
-				pServer = prettyServer(pName)
+				pServer = M.prettyServer(pName)
 				pName = "All"				
 			end	
 			
 			local playerExp = (GlobalIgnoreDB.expList[index] or 0)
-			local daysExp   = playerExp - daysFromToday(GlobalIgnoreDB.dateList[index])
+			local daysExp   = playerExp - M.daysFromToday(GlobalIgnoreDB.dateList[index])
 
 			if playerExp == 0 then
 				pExpire = "|cff808080"..L["EXP_NVR"]
@@ -448,7 +451,7 @@ local function IgnoreListDrawUpdate (self)
 			IgnoreScrollButtons[count].name:SetText(pName)
 			IgnoreScrollButtons[count].server:SetText(pServer)
 			IgnoreScrollButtons[count].type:SetText(pType)
-			IgnoreScrollButtons[count].listed:SetText(daysFromToday(GlobalIgnoreDB.dateList[index]) .. "d")
+			IgnoreScrollButtons[count].listed:SetText(M.daysFromToday(GlobalIgnoreDB.dateList[index]) .. "d")
 			IgnoreScrollButtons[count].expire:SetText(pExpire)
 			IgnoreScrollButtons[count].note:SetText("|cff69CCF0"..GlobalIgnoreDB.notes[index])
 			
@@ -472,13 +475,13 @@ local function CreateIgnoreButtons()
 	IgnoreScrollButtons = {}
 	
 	for count = 1, BUTTON_TOTAL do
-
-		if wowIsClassic == true then
+	
+		if V.wowIsClassic == true then
 			IgnoreScrollButtons[count] = CreateFrame("Button", nil, IgnoreScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
 		else
 			IgnoreScrollButtons[count] = CreateFrame("Button", nil, IgnoreScrollFrame:GetParent(), "IgnoreListButtonTemplate")
 		end
-		
+	
 		if count == 1 then
 			IgnoreScrollButtons[count]:SetPoint("TOPLEFT", IgnoreScrollFrame, -1, 0)
 		else
@@ -487,7 +490,7 @@ local function CreateIgnoreButtons()
 
 		IgnoreScrollButtons[count]:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
 		IgnoreScrollButtons[count]:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-		IgnoreScrollButtons[count]:SetScript("OnClick", IgnoreScrollClick)		
+		IgnoreScrollButtons[count]:SetScript("OnClick", M.IgnoreScrollClick)
 
 		-- set name style
 		IgnoreScrollButtons[count].name:SetWidth(COL_NAME)
@@ -527,17 +530,17 @@ local function CreateIgnoreButtons()
 	IgnoreListDrawUpdate(IgnoreScrollFrame)
 end
 
-function IgnoreScrollDoubleClick()
-	nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
-	StaticPopup_Show("GIL_REASON", nameUI)
+function M.IgnoreScrollDoubleClick()
+	V.nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
+	StaticPopup_Show("GIL_REASON", V.nameUI)
 end
 
-function IgnoreScrollClick(self, button, down)
+function M.IgnoreScrollClick(self, button, down)
 
 	if down == true then return end
 	
 	if IgnoreScrollSelect == self:GetID() and button == "LeftButton" then
-		IgnoreScrollDoubleClick()
+		M.IgnoreScrollDoubleClick()
 		return
 	elseif IgnoreScrollSelect ~= self:GetID() then
 		IgnoreScrollSelect = self:GetID()
@@ -545,24 +548,24 @@ function IgnoreScrollClick(self, button, down)
 	end
 	
 	if button == "RightButton" then	
-		nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
+		V.nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
 		
 		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
-			root:CreateTitle(nameUI)
+			root:CreateTitle(V.nameUI)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_1"],
 				function()
-					IgnoreScrollDoubleClick()
+					M.IgnoreScrollDoubleClick()
 				end)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_2"],
 				function()
-					StaticPopup_Show("GIL_EXPIRE", nameUI)
+					StaticPopup_Show("GIL_EXPIRE", V.nameUI)
 				end)
 			root:CreateButton(L["RCM_3"],
 				function()
 					GlobalIgnoreDB.expList[IgnoreScrollIndex[IgnoreScrollSelect]] = 0
-					GILUpdateUI()
+					M.GILUpdateUI()
 				end)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_4"],
@@ -586,7 +589,7 @@ local function elementName (num)
 	local type = GlobalIgnoreDB.typeList[num]
 	
 	if type == "player" or type == "npc" then
-		return removeServer(GlobalIgnoreDB.ignoreList[num], true)
+		return M.removeServer(GlobalIgnoreDB.ignoreList[num], true)
 	elseif type == "server" then
 		return "All"
 	else
@@ -599,7 +602,7 @@ local function elementServer (num)
 	local type = GlobalIgnoreDB.typeList[num]
 
 	if type == "player" then
-		return getServer(GlobalIgnoreDB.ignoreList[num])
+		return M.getServer(GlobalIgnoreDB.ignoreList[num])
 	elseif type == "server" then
 		return GlobalIgnoreDB.ignoreList[num]
 	elseif type == "npc" then
@@ -622,7 +625,7 @@ end
 
 local function createSortedIndex (sortType)
 
-	needSorted			= false
+	V.needSorted			= false
 	IgnoreScrollIndex	= {}
 	IgnoreScrollType	= sortType
 	
@@ -683,8 +686,8 @@ local function createSortedIndex (sortType)
 					return elementName(a) < elementName(b)
 				end
 			elseif sortType == 7 then
-				local SA = daysFromToday(GlobalIgnoreDB.dateList[a])
-				local SB = daysFromToday(GlobalIgnoreDB.dateList[b])
+				local SA = M.daysFromToday(GlobalIgnoreDB.dateList[a])
+				local SB = M.daysFromToday(GlobalIgnoreDB.dateList[b])
 				
 				if SA < SB then
 					return true
@@ -694,8 +697,8 @@ local function createSortedIndex (sortType)
 					return elementName(a) < elementName(b)
 				end
 			elseif sortType == 8 then
-				local SA = daysFromToday(GlobalIgnoreDB.dateList[a])
-				local SB = daysFromToday(GlobalIgnoreDB.dateList[b])
+				local SA = M.daysFromToday(GlobalIgnoreDB.dateList[a])
+				local SB = M.daysFromToday(GlobalIgnoreDB.dateList[b])
 
 				if SA > SB then
 					return true
@@ -712,14 +715,14 @@ local function createSortedIndex (sortType)
 				if not SA or SA == 0 then
 					SA = 100000
 				else
-					SA = SA - daysFromToday(GlobalIgnoreDB.dateList[a])
+					SA = SA - M.daysFromToday(GlobalIgnoreDB.dateList[a])
 					if SA < 1 then SA = -1 end
 				end
 					
 				if not SB or SB == 0 then
 					SB = 100000
 				else
-					SB = SB - daysFromToday(GlobalIgnoreDB.dateList[b])
+					SB = SB - M.daysFromToday(GlobalIgnoreDB.dateList[b])
 					if SB < 1 then SB = -1 end
 				end
 				
@@ -737,14 +740,14 @@ local function createSortedIndex (sortType)
 				if not SA or SA == 0 then
 					SA = -100000
 				else
-					SA = SA - daysFromToday(GlobalIgnoreDB.dateList[a])
+					SA = SA - M.daysFromToday(GlobalIgnoreDB.dateList[a])
 					if SA < 1 then SA = -1 end
 				end
 					
 				if not SB or SB == 0 then
 					SB = -100000
 				else
-					SB = SB - daysFromToday(GlobalIgnoreDB.dateList[b])
+					SB = SB - M.daysFromToday(GlobalIgnoreDB.dateList[b])
 					if SB < 1 then SB = -1 end
 				end
 				
@@ -976,8 +979,8 @@ local function CreateUIFrames()
 		
 	MainFrame:SetScript("OnShow",
 		function (self)
-			if GIL_SyncOK == false then
-				SyncIgnoreList(GlobalIgnoreDB.chatmsg == nil or GlobalIgnoreDB.chatmsg == false)
+			if V.GIL_SyncOK == false then
+				M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 			end
 		end)
 
@@ -1106,7 +1109,7 @@ local function CreateUIFrames()
 	
 	Tab2Frame:SetScript("OnShow",
 		function(self)
-			FilterListDrawUpdate(FilterScrollFrame) -- update filter count display
+			M.FilterListDrawUpdate(FilterScrollFrame) -- update filter count display
 		end)
 	
 	Tab2Frame:Hide()
@@ -1134,20 +1137,20 @@ local function CreateUIFrames()
 	
 	FilterScrollFrame:SetScript("OnVerticalScroll",
 		function(self, offset)
-			FauxScrollFrame_OnVerticalScroll(self, offset, BUTTON_HEIGHT, FilterListDrawUpdate)
+			FauxScrollFrame_OnVerticalScroll(self, offset, BUTTON_HEIGHT, M.FilterListDrawUpdate)
 		end)
 	
 	CreateFilterButtons()
 
 	-- create
-	Button = CreateFrame("Button", "GILFrame2CreateButton", Tab2Frame, "UIPanelButtonTemplate")
+	local Button = CreateFrame("Button", "GILFrame2CreateButton", Tab2Frame, "UIPanelButtonTemplate")
 	Button:SetSize(110, 22)
 	Button:SetText(L["BUT_5"])
 	--Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)
 	Button:SetPoint("BOTTOMRIGHT", -1, -24)
 	Button:SetScript("OnClick",
 		function(self)
-			idx = #GlobalIgnoreDB.filterList + 1
+			local idx = #GlobalIgnoreDB.filterList + 1
 			
 			GlobalIgnoreDB.filterList[idx]		= "[word=NewChatFilter]"
 			GlobalIgnoreDB.filterDesc[idx]		= "New Chat Filter"
@@ -1155,7 +1158,7 @@ local function CreateUIFrames()
 			GlobalIgnoreDB.filterActive[idx]	= true
 			GlobalIgnoreDB.filterID[idx]		= ""
 			
-			FilterListDrawUpdate(FilterScrollFrame)
+			M.FilterListDrawUpdate(FilterScrollFrame)
 		end)
 
 	local Button = CreateFrame("Button", "GILFrame2RemoveButton", Tab2Frame, "UIPanelButtonTemplate")	
@@ -1217,7 +1220,7 @@ local function CreateUIFrames()
 	
 	-- WIDGETS
 	
-	Text = Tab2FrameEdit:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+	local Text = Tab2FrameEdit:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
 	Text:SetPoint("TOPLEFT", Tab2FrameEdit, "TOPLEFT", -8, -18)
 	Text:SetWidth(200)
 	Text:SetText("Chat Filter Editor:")
@@ -1341,9 +1344,9 @@ local function CreateUIFrames()
 			local chatStr   = string.lower(GILFrame2EditTestField.EditBox:GetText())
 			local filterStr = GILFrame2EditFilterField.EditBox:GetText()
 						
-			local res = filterComplex (filterStr, chatStr, 1)
+			local res = M.filterComplex (filterStr, chatStr, 1)
 			
-			if lastFilterError == true then
+			if V.lastFilterError == true then
 				GILFrame2EditTestResult:SetText("|cffffff00FILTER ERROR")
 			elseif res == true then
 				GILFrame2EditTestResult:SetText("|cffff5c5cBLOCKED")			
@@ -1709,26 +1712,26 @@ end
 -- CORE UI GLOBALS --
 ---------------------
 
-function GILUpdateChatCount(filterNumber)
+function M.GILUpdateChatCount(filterNumber)
 	if MainFrame ~= nil and Tab2Frame:IsVisible() then	
-		FilterListDrawUpdate(FilterScrollFrame)
+		M.FilterListDrawUpdate(FilterScrollFrame)
 	end
 end
 
-function GILUpdateUI (forced)
+function M.GILUpdateUI (forced)
 	if MainFrame ~= nil and Tab1Frame:IsVisible() then	
-		if needSorted or (forced and forced == true) then
+		if V.needSorted or (forced and forced == true) then
 			createSortedIndex(IgnoreScrollType)
 		else
 			IgnoreListDrawUpdate(IgnoreScrollFrame)
 		end
 	else
-		if needSorted or (forced and forced == true) then
+		if V.needSorted or (forced and forced == true) then
 			createSortedIndex(IgnoreScrollType)
 		end
 	end
 end
 
-function GIL_GUI()
+function M.GIL_GUI()
 	CreateUIFrames()
 end
