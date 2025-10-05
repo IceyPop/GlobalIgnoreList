@@ -1,31 +1,36 @@
 ----------------------------------
 -- Global Ignore List Variables --
 ----------------------------------
+local addonName, addon 	= ...
+local L = addon.L -- localization entries
+local V = addon.V -- shared variables
+local M = addon.M -- shared methods
 
-GIL_Loaded				= false
-GIL_SyncOK				= false
-GIL_SyncTried			= false
-GIL_InSync				= false
-lastFilterError			= false
+V.GIL_Loaded				= false
+V.GIL_SyncOK				= false
+V.GIL_SyncTried			= false
+V.GIL_InSync				= false
+V.lastFilterError		= false
 
-local _, L				= ...
 local GILFRAME			= nil
 local gotLoaded			= false
+local gotUpdate			= false
 local gotEntering		= false
 local safeToLoad		= false
 local doLoginIgnore		= true
-local faction			= nil
+local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
 local maxHistorySize	= 200
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
-local timer				= 0
+local timer				  = 0
 local loadedTime		= GetTime()
 local lastSentIgnore	= ""
 local lastFilterMsgID	= -1
 local lastFilterResult	= ""
+local filterNum			= 0
 local filterDefDesc		= {}
 local filterDefFilter	= {}
 local filterDefActive   = {}
@@ -46,23 +51,23 @@ local BlizzardDelIgnoreByIndex	= nil
 local BlizzardAddOrDelIgnore	= nil
 local BlizzardInviteUnit		= nil
 
---if wowIsERA == true then print("DEBUG WOW IS ERA") end
---if wowIsTBC == true then print("DEBUG WOW IS TBC") end
---if wowIsWrath == true then print("DEBUG WOW IS WRATH") end
---if wowIsRetail == true then print("DEBUG WOW IS RETAIL") end
---if wowIsClassic == true then print("DEBUG WOW IS CLASSIC") end
+--if V.wowIsERA == true then print("DEBUG WOW IS ERA") end
+--if V.wowIsTBC == true then print("DEBUG WOW IS TBC") end
+--if V.wowIsWrath == true then print("DEBUG WOW IS WRATH") end
+--if V.wowIsRetail == true then print("DEBUG WOW IS RETAIL") end
+--if V.wowIsClassic == true then print("DEBUG WOW IS CLASSIC") end
 
 ----------------------------------
 -- Global Ignore List Functions --
 ----------------------------------
 
-function debugMsg (msg)
+function M.debugMsg (msg)
 --	if GlobalIgnoreDB.showIgnoreDebug == true then
 --		print("|cffffff00Global Ignore: " .. msg)
 --	end
 end
 
-function ShowMsg (msg)
+function M.ShowMsg (msg)
 	print ("|cff33ff99Global Ignore: |cffffffff" .. (msg or "Critical error"))
 end
 
@@ -76,7 +81,7 @@ local function OnOff (value)
 	end
 end
 
-function dayString (value)
+function M.dayString (value)
 	if value == 1 then
 		return L["DAY"]
 	else
@@ -89,15 +94,15 @@ local function hasDeleted (name)
 	if not name then return 0 end
 	
 	for count = 1, #GlobalIgnoreDB.delList do
-		--debugMsg("Comparing " .. GlobalIgnoreDB.delList[count] .. " to " .. name)
+		--M.debugMsg("Comparing " .. GlobalIgnoreDB.delList[count] .. " to " .. name)
 		
 		if GlobalIgnoreDB.delList[count] == name then
-			debugMsg("Has deleted TRUE for " .. name)
+			M.debugMsg("Has deleted TRUE for " .. name)
 			return count
 		end
 	end
 	
-	debugMsg("Has deleted false for " .. name)
+	M.debugMsg("Has deleted false for " .. name)
 	
 	return 0
 end
@@ -106,14 +111,14 @@ local function addDeleted (name)
 
 	local idx = hasDeleted(name)
 	
-	debugMsg("addDeleted: hasDeleted " .. idx)
+	M.debugMsg("addDeleted: hasDeleted " .. idx)
 	
 	if idx == 0 then		
 		if #GlobalIgnoreDB.delList >= maxHistorySize then
 			table.remove(GlobalIgnoreDB.delList, 1)
 		end
 		
-		debugMsg("Adding " .. name .. " (".. idx .. ") to delete list")
+		M.debugMsg("Adding " .. name .. " (".. idx .. ") to delete list")
 		
  		GlobalIgnoreDB.delList[#GlobalIgnoreDB.delList + 1] = name
  	end
@@ -123,11 +128,11 @@ local function removeDeleted (name)
 	local idx = hasDeleted(name)
 		
 	if idx > 0 then
-		debugMsg("Removing " .. name .. " (".. idx .. ") from delete list")
+		M.debugMsg("Removing " .. name .. " (".. idx .. ") from delete list")
 		table.remove(GlobalIgnoreDB.delList, idx)
 		
 		local idx = hasDeleted(name)
-		debugMsg("After removal idx " .. idx)
+		M.debugMsg("After removal idx " .. idx)
 	end
 end
 
@@ -145,7 +150,7 @@ local function AddToList(newname, newfaction, newnote, newtype)
 
 	removeDeleted(newname)
 	
-	GIL_LFG_Refresh()
+	M.GIL_LFG_Refresh()
 end
 
 
@@ -166,7 +171,7 @@ local function RemoveFromList(index)
 	end
 end
 	
-function RemoveChatFilter (index)
+function M.RemoveChatFilter (index)
 	if index <= #GlobalIgnoreDB.filterList then
 		table.remove(GlobalIgnoreDB.filterList,		index)
 		table.remove(GlobalIgnoreDB.filterDesc,		index)
@@ -192,7 +197,7 @@ local function getSyncValue (index)
 			v = tonumber(string.sub(s, p + 1))
 			s = string.sub(s, 1, p - 1)
 			
-			if playerName == s then
+			if V.playerName == s then
 				return v, c				
 			end
 		end
@@ -211,14 +216,14 @@ local function setSyncValue (name, index)
 		
 	val = val + 1
 	
-	--debugMsg("Setting "..name.. " failed add attempts to "..val)
+	--M.debugMsg("Setting "..name.. " failed add attempts to "..val)
 	
-	GlobalIgnoreDB.syncInfo[index][idx] = playerName .. "@" .. val
+	GlobalIgnoreDB.syncInfo[index][idx] = V.playerName .. "@" .. val
 end		
 
 local function isServerMatch (server1, server2)
 
-	return Proper(server1) == Proper(server2)	
+	return M.Proper(server1) == M.Proper(server2)
 end
 
 local function hasFilterID (id)
@@ -249,11 +254,11 @@ local function hasIgnored (name)
 
 	local result = 0
 	
-	name = Proper(addServer(name))
+	name = M.Proper(M.addServer(name))
 		
 	for count = 1, C_FriendList.GetNumIgnores() do
 	
-		if name == Proper(addServer(C_FriendList.GetIgnoreName(count))) then
+		if name == M.Proper(M.addServer(C_FriendList.GetIgnoreName(count))) then
 			result = count
 			
 			break
@@ -263,7 +268,7 @@ local function hasIgnored (name)
 	return result
 end
 
-function hasNPCIgnored (name)
+function M.hasNPCIgnored (name)
 
 	if not name then return 0 end
 	
@@ -289,7 +294,7 @@ local function hasServerIgnored (name)
 	return 0
 end
 
-function hasGroupWarning (name)
+function M.hasGroupWarning (name)
 
 	if not name then return 0 end
 	
@@ -302,7 +307,7 @@ function hasGroupWarning (name)
 	return 0
 end
 
-function hasGlobalIgnored (name)
+function M.hasGlobalIgnored (name)
 
 	if not name then return 0 end
 
@@ -315,7 +320,7 @@ function hasGlobalIgnored (name)
 	return 0
 end
 
-function hasAnyIgnored (name)
+function M.hasAnyIgnored (name)
 
 	if not name then return 0 end
 
@@ -344,22 +349,22 @@ local function ShowIgnoreList (param)
 	end
 	
 	if days > 0 then
-		ShowMsg("|cffffff00" .. format(L["LIST_1"], days))
+		M.ShowMsg("|cffffff00" .. format(L["LIST_1"], days))
 	else
 		if sName ~= "" then
-			sName = Proper(sName)
+			sName = M.Proper(sName)
 			
 			if sName == "Npc" then
-				ShowMsg("|cffffff00".. L["LIST_2"])
+				M.ShowMsg("|cffffff00".. L["LIST_2"])
 			else			
 				if sName == "Server" then
-					sName = serverName		
+					sName = V.serverName
 				end
 				
-				ShowMsg("|cffffff00" .. format(L["LIST_3"], sName))
+				M.ShowMsg("|cffffff00" .. format(L["LIST_3"], sName))
 			end
 		else
-			ShowMsg("|cffffff00" .. L["LIST_4"])
+			M.ShowMsg("|cffffff00" .. L["LIST_4"])
 		end
 	end
 	
@@ -377,29 +382,29 @@ local function ShowIgnoreList (param)
 		end
 	
 		if days > 0 then
-			ok = daysFromToday(GlobalIgnoreDB.dateList[key]) >= days
+			ok = M.daysFromToday(GlobalIgnoreDB.dateList[key]) >= days
 		elseif sName ~= "" then
-			ok = (type == "N" and sName == "Npc") or (type == "P" and isServerMatch(sName, getServer(value))) or (type == "S" and isServerMatch(sName, value))
+			ok = (type == "N" and sName == "Npc") or (type == "P" and isServerMatch(sName, M.getServer(value))) or (type == "S" and isServerMatch(sName, value))
 		end
 		
 		if ok then
-			local str = "  (" .. key .. ") [" .. type.. "] " .. value .. " (" .. (GlobalIgnoreDB.factionList[key] or "Unknown") .. ") " .. "[".. daysFromToday(GlobalIgnoreDB.dateList[key]) .. " "..L["DAYS"] .. "]"
+			local str = "  (" .. key .. ") [" .. type.. "] " .. value .. " (" .. (GlobalIgnoreDB.factionList[key] or "Unknown") .. ") " .. "[".. M.daysFromToday(GlobalIgnoreDB.dateList[key]) .. " "..L["DAYS"] .. "]"
 			
 			if GlobalIgnoreDB.notes[key] ~= "" then
 				str = str .." (" .. GlobalIgnoreDB.notes[key] .. ")"
 			end
 			
-			ShowMsg(str)
+			M.ShowMsg(str)
 
 			count = count + 1			
 		end
 		
 	end
 	
-	ShowMsg("|cffffff00" .. format(L["LIST_5"], count))
+	M.ShowMsg("|cffffff00" .. format(L["LIST_5"], count))
 end
 
-function ResetSpamFilters()
+function M.ResetSpamFilters()
 	GlobalIgnoreDB.filterList   = {}
 	GlobalIgnoreDB.filterDesc   = {}
 	GlobalIgnoreDB.filterCount  = {}
@@ -470,7 +475,7 @@ local function ResetIgnoreDB()
 	
 	GlobalIgnoreImported = false
 	
-	ResetSpamFilters()
+	M.ResetSpamFilters()
 end
 
 local function isValidList()
@@ -480,7 +485,7 @@ local function isValidList()
 		local found = 0
 			
 		for count = 1, C_FriendList.GetNumIgnores() do
-			str = removeServer(C_FriendList.GetIgnoreName(count), true)
+			str = M.removeServer(C_FriendList.GetIgnoreName(count), true)
 
 			if str ~= nil and str ~= UNKNOWN then
 				break
@@ -491,7 +496,7 @@ local function isValidList()
  			
 		if str == nil or str == UNKNOWN then
 			if GlobalIgnoreDB.showWarning == true then
-				ShowMsg(format(L["LOAD_5"], found, UNKNOWN))
+				M.ShowMsg(format(L["LOAD_5"], found, UNKNOWN))
 			end
 					
 			return false
@@ -501,19 +506,19 @@ local function isValidList()
 	return true
 end
 
-function SyncIgnoreList (silent)
+function M.SyncIgnoreList (silent)
 
 	if silent == nil then
 		silent = false
 	end
 	
-	ShowMsg(L["LOAD_4"])
+	M.ShowMsg(L["LOAD_4"])
 
 	if isValidList() == false then
 		return
 	end
 	
-	GIL_InSync = true
+	V.GIL_InSync = true
 	
 	-- import ignore list if first time sync
 	
@@ -524,7 +529,7 @@ function SyncIgnoreList (silent)
 		local name
 			
 		if (ignores > 0) and (silent == false) then
-			ShowMsg(L["LOAD_2"])
+			M.ShowMsg(L["LOAD_2"])
 		end
 			
 		for count = 1, ignores do
@@ -533,19 +538,19 @@ function SyncIgnoreList (silent)
 			
 			if name ~= nil then
 			
-				local tmp = removeServer(name, true)
+				local tmp = M.removeServer(name, true)
 				
 				if (tmp ~= "") and (tmp ~= UNKNOWN) then
 				
-					name = Proper(addServer(name))
+					name = M.Proper(M.addServer(name))
 
-					if hasGlobalIgnored(name) == 0 then
+					if M.hasGlobalIgnored(name) == 0 then
 						added = added + 1
 						
 						AddToList(name, faction)
 										
 						if silent == false then
-							ShowMsg (format(L["LOAD_3"], name))
+							M.ShowMsg (format(L["LOAD_3"], name))
 						end
 					end
 				end
@@ -562,15 +567,15 @@ function SyncIgnoreList (silent)
 	while count < #GlobalIgnoreDB.dateList do
 		count = count + 1
 		
-		local tmp = removeServer(GlobalIgnoreDB.ignoreList[count], true)
+		local tmp = M.removeServer(GlobalIgnoreDB.ignoreList[count], true)
 		if tmp == "" then
-			debugMsg ("Blank character name found in position " .. count);
+			M.debugMsg ("Blank character name found in position " .. count);
 			RemoveFromList(count)
 		end
 		
-		if GlobalIgnoreDB.expList[count] > 0 and daysFromToday(GlobalIgnoreDB.dateList[count]) >= GlobalIgnoreDB.expList[count] then
-			local name = addServer(GlobalIgnoreDB.ignoreList[count])		
-			debugMsg ("Removing character "..(name or "nil").." due to expiration date")			
+		if GlobalIgnoreDB.expList[count] > 0 and M.daysFromToday(GlobalIgnoreDB.dateList[count]) >= GlobalIgnoreDB.expList[count] then
+			local name = M.addServer(GlobalIgnoreDB.ignoreList[count])
+			M.debugMsg ("Removing character "..(name or "nil").." due to expiration date")
 			C_FriendList.DelIgnore(name)
 			count = 0
 		end
@@ -584,14 +589,14 @@ function SyncIgnoreList (silent)
 		local name       = C_FriendList.GetIgnoreName(count)
 
 		if (name == "") then
-			debugMsg("Removing blank name on Blizzard ignore list")
+			M.debugMsg("Removing blank name on Blizzard ignore list")
 			BlizzardDelIgnoreByIndex(count)
 		end
 		
 		if (name ~= nil and name ~= "" and name ~= UNKNOWN) then
-			name = Proper(addServer(name))
+			name = M.Proper(M.addServer(name))
 			
-			local globIdx = hasGlobalIgnored(name)
+			local globIdx = M.hasGlobalIgnored(name)
 			
 			if globIdx == 0 then
 				if GlobalIgnoreDB.trackChanges == true then
@@ -599,7 +604,7 @@ function SyncIgnoreList (silent)
 					local idx = hasDeleted(name)
 				
 					if idx == 0 then
-						debugMsg ("New player "..name.. " found on character, adding to Global Ignore List")
+						M.debugMsg ("New player "..name.. " found on character, adding to Global Ignore List")
 						skipRemove = true
 						C_FriendList.AddIgnore(name, true)
 					end
@@ -608,10 +613,10 @@ function SyncIgnoreList (silent)
 				if skipRemove == false then
 
 					if not silent then
-						ShowMsg (format(L["SYNC_1"], name))
+						M.ShowMsg (format(L["SYNC_1"], name))
 					end			
 				
-					debugMsg ("Removing "..name.." from character ignore because they are not on Global Ignore List")
+					M.debugMsg ("Removing "..name.." from character ignore because they are not on Global Ignore List")
 				
 					BlizzardDelIgnoreByIndex (hasIgnored(name))
 				end
@@ -631,8 +636,8 @@ function SyncIgnoreList (silent)
 				local tries = getSyncValue(listCount)
 
 				if tries >= maxSyncTries then
-					debugMsg ("Removing "..GlobalIgnoreDB.ignoreList[listCount].." after "..tries.." failed attempts to add to ignore list")
-					C_FriendList.DelIgnore(removeServer(GlobalIgnoreDB.ignoreList[listCount]))
+					M.debugMsg ("Removing "..GlobalIgnoreDB.ignoreList[listCount].." after "..tries.." failed attempts to add to ignore list")
+					C_FriendList.DelIgnore(M.removeServer(GlobalIgnoreDB.ignoreList[listCount]))
 					listCount = listCount - 1				
 				end
 			end
@@ -651,15 +656,15 @@ function SyncIgnoreList (silent)
 		
 			if GlobalIgnoreDB.typeList[key] == "player" then
 		
-				local name = addServer(value)
+				local name = M.addServer(value)
 				
 				--print("DEBUG processing: ".. name .. " ignored? ".. hasIgnored(name));
 				
-				if hasIgnored(name) == 0 then					
+				if hasIgnored(name) == 0 then
 					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
 
 					if ok then
-						ok = (isServerMatch(serverName, getServer(name))) or (GlobalIgnoreDB.sameserver == false)
+						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false)
 					end
 					
 					if ok then
@@ -667,10 +672,10 @@ function SyncIgnoreList (silent)
 						
 						setSyncValue(name, key)
 						
-						name = removeServer(name)
+						name = M.removeServer(name)
 
 						if not silent then
-							ShowMsg (format(L["SYNC_2"], name))
+							M.ShowMsg (format(L["SYNC_2"], name))
 						end					
 								
 						BlizzardAddIgnore(name)
@@ -684,11 +689,11 @@ function SyncIgnoreList (silent)
 		end
 	end	
 
-	GIL_InSync = false
-	GIL_SyncOK = true
+	V.GIL_InSync = false
+	V.GIL_SyncOK = true
 end
 
-function PruneIgnoreList (days, doit)
+function M.PruneIgnoreList (days, doit)
 
 	if days == nil or days <= 0 then		
 		return 0
@@ -700,13 +705,13 @@ function PruneIgnoreList (days, doit)
 	while count < #GlobalIgnoreDB.dateList do
 		count = count + 1
 	
-		if daysFromToday(GlobalIgnoreDB.dateList[count]) >= days then
+		if M.daysFromToday(GlobalIgnoreDB.dateList[count]) >= days then
 			targets = targets + 1
 			
-			local name = addServer(GlobalIgnoreDB.ignoreList[count])
+			local name = M.addServer(GlobalIgnoreDB.ignoreList[count])
 					
 			--if doit ~= true then
-			--	ShowMsg("Prune will remove: "..name)
+			--	M.ShowMsg("Prune will remove: "..name)
 			--end
 			
 			if doit == true then
@@ -726,11 +731,11 @@ end
 
 local function ApplicationStartup(self)
 
-	if GIL_Loaded == true or safeToLoad == false then
+	if V.GIL_Loaded == true or safeToLoad == false then
 		return
 	end
 			
-	ShowMsg(L["LOAD_1"])
+	M.ShowMsg(L["LOAD_1"])
 
 	-- Set filter defaults
 	
@@ -794,7 +799,7 @@ local function ApplicationStartup(self)
 	end
 	
 	-- set missing defaults or upgrade if needed
-
+	
 	if GlobalIgnoreDB.sameserver == nil then
 		GlobalIgnoreDB.sameserver = true
 	end
@@ -868,7 +873,7 @@ local function ApplicationStartup(self)
 	end
 	
 	if GlobalIgnoreDB.filterList == nil or GlobalIgnoreDB.filterDesc == nil or GlobalIgnoreDB.filterCount == nil then
-		ResetSpamFilters()
+		M.ResetSpamFilters()
 	end
 	
 	if GlobalIgnoreDB.delList == nil then
@@ -947,7 +952,7 @@ local function ApplicationStartup(self)
 		GlobalIgnoreDB.revision = 1
 		
 		for count = 1, #GlobalIgnoreDB.ignoreList do
-			GlobalIgnoreDB.ignoreList[count] = Proper(GlobalIgnoreDB.ignoreList[count])
+			GlobalIgnoreDB.ignoreList[count] = M.Proper(GlobalIgnoreDB.ignoreList[count])
 		end
 	end
 	
@@ -975,11 +980,11 @@ local function ApplicationStartup(self)
 
 	loadedTime = GetTime()
 		
-	SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
+	M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 		
-	GIL_Loaded = true
+	V.GIL_Loaded = true
 	
-	GIL_HookFunctions()
+	M.GIL_HookFunctions()
 	
 	self:UnregisterEvent("IGNORELIST_UPDATE")
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
@@ -993,7 +998,7 @@ local function ApplicationStartup(self)
 			local found = hasFilterID(filterDefID[count])
 	
 			if (found == 0) then
-				ShowMsg (format(L["SYNC_3"], filterDefDesc[count]))
+				M.ShowMsg (format(L["SYNC_3"], filterDefDesc[count]))
 	
 				GlobalIgnoreDB.filterDesc[#GlobalIgnoreDB.filterDesc + 1]		= filterDefDesc[count]
 				GlobalIgnoreDB.filterList[#GlobalIgnoreDB.filterList + 1]		= filterDefFilter[count]
@@ -1001,7 +1006,7 @@ local function ApplicationStartup(self)
 				GlobalIgnoreDB.filterCount[#GlobalIgnoreDB.filterCount + 1]		= 0
 				GlobalIgnoreDB.filterID[#GlobalIgnoreDB.filterID + 1]			= filterDefID[count]
 			elseif GlobalIgnoreDB.filterDesc[found] ~= filterDefDesc[count] or GlobalIgnoreDB.filterList[found] ~= filterDefFilter[count] then
-				ShowMsg (format(L["SYNC_5"], filterDefDesc[count]))
+				M.ShowMsg (format(L["SYNC_5"], filterDefDesc[count]))
 				
 				GlobalIgnoreDB.filterDesc[found] = filterDefDesc[count]
 				GlobalIgnoreDB.filterList[found] = filterDefFilter[count]
@@ -1010,12 +1015,12 @@ local function ApplicationStartup(self)
 		
 		-- Remove any old filters that are no longer used as defaults
 		
-		count = 1
+		local count = 1
 		
 		while (count < #GlobalIgnoreDB.filterID) do
 			if (isDefFilterID(GlobalIgnoreDB.filterID[count]) == 0) then
-				ShowMsg (format(L["SYNC_4"], GlobalIgnoreDB.filterDesc[count]))
-				RemoveChatFilter(count)
+				M.ShowMsg (format(L["SYNC_4"], GlobalIgnoreDB.filterDesc[count]))
+				M.RemoveChatFilter(count)
 			else
 				count = count + 1
 			end
@@ -1063,9 +1068,9 @@ local function EventHandler (self, event, sender, ...)
 				name = GetUnitName(prefix..count, true)
 			
 				if name then
-					name = addServer(name)
+					name = M.addServer(name)
 					
-					if hasGlobalIgnored(name) > 0 and hasGroupWarning(name) == 0 then					
+					if M.hasGlobalIgnored(name) > 0 and M.hasGroupWarning(name) == 0 then
 						doWarn = true
 						groupWarning[#groupWarning + 1] = name
 					end
@@ -1079,21 +1084,21 @@ local function EventHandler (self, event, sender, ...)
 					nameList = nameList .. "\n" .. groupWarning[count]
 				end
 				
-				ShowMsg(format(L["CHAT_1"], #groupWarning, nameList))
+				M.ShowMsg(format(L["CHAT_1"], #groupWarning, nameList))
 
 				StaticPopup_Show("GIL_PARTYWARN", #groupWarning, nameList)
 			end
 		end		
 	end
 	
-	if event == "PARTY_INVITE_REQUEST" and GIL_Loaded == true then
+	if event == "PARTY_INVITE_REQUEST" and V.GIL_Loaded == true then
 	
-		sender = addServer(sender)
+		sender = M.addServer(sender)
 
-		if hasGlobalIgnored(sender) > 0 then
-			DeclineGroup()
+		if M.hasGlobalIgnored(sender) > 0 then
+			DeclineGroup()			
 			if GlobalIgnoreDB.showDeclines == true then
-				ShowMsg (format(L["MSG_2"], sender))
+				M.ShowMsg (format(L["MSG_2"], sender))
 			end
 
 			StaticPopup_Hide("PARTY_INVITE")
@@ -1102,26 +1107,26 @@ local function EventHandler (self, event, sender, ...)
 		return
 	end
 	
-	if event == "GUILD_INVITE_REQUEST" and GIL_Loaded == true then
-		sender = addServer(sender)
+	if event == "DUEL_REQUESTED" and V.GIL_Loaded == true then
+		sender = M.addServer(sender)
 		
-		if hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 then
 			DeclineGuild()
 			if GlobalIgnoreDB.showDeclines == true then
-				ShowMsg (format(L["MSG_4"], sender))
+				M.ShowMsg (format(L["MSG_4"], sender))
 			end
 		end
 		
 		return
 	end
 	
-	if event == "DUEL_REQUESTED" and GIL_Loaded == true then
-		sender = addServer(sender)
+	if event == "DUEL_REQUESTED" and V.GIL_Loaded == true then
+		sender = M.addServer(sender)
 		
-		if hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 then
 			CancelDuel()
 			if GlobalIgnoreDB.showDeclines == true then
-				ShowMsg (format(L["MSG_3"], sender))
+				M.ShowMsg (format(L["MSG_3"], sender))
 			end
 		end
 		
@@ -1161,7 +1166,7 @@ end
 -- SPAM FILTER ENGINE --
 ------------------------
 
-function filterComplex (filterStr, chatStr, chNumber, chName)
+function M.filterComplex (filterStr, chatStr, chNumber, chName)
 	-- true=should be filtered
 	-- chatStr should be convered to all lower
 	
@@ -1178,7 +1183,7 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 	local char		= string.char
 	local len		= string.len
 	local icons     = 0		
-	local pos1
+	local pos1, pos2, pos3
 	
 	--print("DEBUG Start="..gsub(chatStr, "\124", "\124\124"))
 	
@@ -1399,9 +1404,9 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 			local tempPos	
 			local found
 			
-			lastFilterError = false
+			V.lastFilterError = false
 	
-			while (filterPos < filterLen) and (lastFilterError == false) do
+			while (filterPos < filterLen) and (V.lastFilterError == false) do
 			
 				--print("DEBUG loop ".. filterPos .. " of " .. filterLen)
 
@@ -1469,7 +1474,7 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 							tokenData = ""
 						end
 						
-						token = trim(token)
+						token = M.trim(token)
 						
 						--print("DEBUG token=#"..token.. "#")
 						--print("DEBUG tokenData=#"..tokenData .. "#")
@@ -1690,7 +1695,7 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 							end
 						else
 							--print ("DEBUG filter error="..token .. " data="..tokenData)
-							lastFilterError = true
+							V.lastFilterError = true
 						end
 					
 						token = ""
@@ -1700,7 +1705,7 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 				end
 			end
 						
-			if lastFilterError == false then
+			if V.lastFilterError == false then
 			
 				if gotPR == true then
 					result = result .. ")"
@@ -1712,6 +1717,7 @@ function filterComplex (filterStr, chatStr, chNumber, chName)
 				local ch2
 				local count
 				local chunk
+				local slen
 
 				--print ("DEBUG filterResult start=" .. result)
 	
@@ -1830,16 +1836,16 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 	--	lastMsg = message
 	--end
 
-	if event == "CHAT_MSG_SYSTEM" then
+	if event == "CHAT_MSG_SYSTEM" then		
 		if message == ERR_IGNORE_FULL then
 			return true
 		end
-
+	
 		if doLoginIgnore == true and (GetTime() - loadedTime > 90) then
-			doLoginIgnore = false
+				doLoginIgnore = false
 		end
 				
-		if (doLoginIgnore == true) or (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+		if (doLoginIgnore == true) or (V.GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
 			if message == ERR_IGNORE_NOT_FOUND or message == ERR_FRIEND_ERROR then
 				return true
 			end
@@ -1850,18 +1856,18 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				string.find(message, string.gsub(ERR_IGNORE_ALREADY_S, "%%s", ""), 1, true)
 			then
 				return true
-			end
+			end		
 		end
 	end
 			
-	if GIL_Loaded ~= true then
+	if V.GIL_Loaded ~= true then
 		return false
 	end
 	
 	if event == "CHAT_MSG_MONSTER_EMOTE" or event == "CHAT_MSG_MONSTER_PARTY" or event == "CHAT_MSG_MONSTER_SAY" or
 	   event == "CHAT_MSG_MONSTER_WHISPER" or event == "CHAT_MSG_MONSTER_YELL" then
 	   
-        	return (hasNPCIgnored(Proper(from, true)) > 0)
+        	return (M.hasNPCIgnored(M.Proper(from, true)) > 0)
 		
 	elseif event == "CHAT_MSG_SYSTEM" then
 	
@@ -1876,16 +1882,16 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 						return true
 					end
 				else
-					if serverName == getServer(GlobalIgnoreDB.ignoreList[count]) then
-						pName = removeServer(GlobalIgnoreDB.ignoreList[count])
+					if V.serverName == M.getServer(GlobalIgnoreDB.ignoreList[count]) then
+						pName = M.removeServer(GlobalIgnoreDB.ignoreList[count])
 					else
 						pName = GlobalIgnoreDB.ignoreList[count]
 					end
 				
-					local msgOffline = strDown(string.format(ERR_FRIEND_OFFLINE_S, pName))
-					local msgOnline  = strDown(string.format(ERR_FRIEND_ONLINE_SS, pName, pName))
+					local msgOffline = M.strDown(string.format(ERR_FRIEND_OFFLINE_S, pName))
+					local msgOnline  = M.strDown(string.format(ERR_FRIEND_ONLINE_SS, pName, pName))
 
-					message = strDown(message)
+					message = M.strDown(message)
 					
 					if (message == msgOffline) or (message == msgOnline) then
 						return true
@@ -1901,12 +1907,12 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 		local idx = string.find(from, "-", 1, true)
 		
 		if idx == nil then
-			from = from .. "-" .. serverName
+			from = from .. "-" .. V.serverName
 		else
-			from = string.sub(from, 1, idx - 1) .. "-" .. Proper(string.sub(from, idx + 1, string.len(from)))		
+			from = string.sub(from, 1, idx - 1) .. "-" .. M.Proper(string.sub(from, idx + 1, string.len(from)))
 		end
 				
-		if hasGlobalIgnored(from) > 0 or hasServerIgnored(getServer(from)) > 0 then			
+		if M.hasGlobalIgnored(from) > 0 or hasServerIgnored(M.getServer(from)) > 0 then
 			
 			if event == "CHAT_MSG_WHISPER" then
 				local temp = from .. math.ceil(GetTime() - 0.5)
@@ -1949,7 +1955,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					return false
 				end
 				
-				if GlobalIgnoreDB.skipYourself == true and from == playerName then
+				if GlobalIgnoreDB.skipYourself == true and from == V.playerName then
 					return false
 				end
 					
@@ -1991,7 +1997,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				
 				lastFilterMsgID = msgID
 					
-				lastFilterResult, filterNum = filterComplex(nil, message, chNumber, chName)
+				lastFilterResult, filterNum = M.filterComplex(nil, message, chNumber, chName)
 				
 				if lastFilterResult == true then
 						
@@ -2001,7 +2007,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 						GlobalIgnoreDB.filterTotal				= GlobalIgnoreDB.filterTotal + 1
 						GlobalIgnoreDB.filterCount[filterNum]	= GlobalIgnoreDB.filterCount[filterNum] + 1
 							
-						GILUpdateChatCount()
+						M.GILUpdateChatCount()
 					end
 							
 					return lastFilterResult
@@ -2060,9 +2066,9 @@ end
 -- CHAT COMMANDS --
 -------------------
 
-function ignoreFromCmd (argStr)
-	argStr = (trim(Proper(argStr)) or "")
-		
+function M.ignoreFromCmd (argStr)
+	argStr = (M.trim(M.Proper(argStr)) or "")
+	local server
 	if argStr == "" then
 		argStr, server =  UnitName("target")
 					
@@ -2076,19 +2082,19 @@ function ignoreFromCmd (argStr)
 	end
 		
 	if argStr ~= "" then
-		C_FriendList.AddIgnore (Proper(argStr))
+		C_FriendList.AddIgnore (M.Proper(argStr))
 	end
 end
 
 function SlashCmdList.GIGNORE (msg)
 
-	msg = strDown(msg)
+	msg = M.strDown(msg)
 	
 	local args   = {}
 	local argStr = ""
 	local count  = 1
 
-	local str = GetWord(msg, count)
+	local str = M.GetWord(msg, count)
 	
 	while str ~= "" do
 		
@@ -2101,21 +2107,21 @@ function SlashCmdList.GIGNORE (msg)
 		end
 		
 		count = count + 1
-		str   = GetWord(msg, count)
+		str   = M.GetWord(msg, count)
 	end
 	
 	if args[1] == "test" then
-	
+
 	elseif args[1] == "clear" then
 	
 		if firstClear and args[2] ~= nil and args[2] == "confirm" then	
 			ResetIgnoreDB()
 			ResetBlizzardIgnore()
-			ShowMsg(L["CMD_2"])
-			--SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
+			M.ShowMsg(L["CMD_2"])
+			--M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 			firstClear = false
 		else
-			ShowMsg("|cffff0000" .. L["CMD_1"])
+			M.ShowMsg("|cffff0000" .. L["CMD_1"])
 			firstClear = true
 		end
 		
@@ -2124,38 +2130,38 @@ function SlashCmdList.GIGNORE (msg)
 		if tonumber(args[2]) then
 			GlobalIgnoreDB.defexpire = tonumber(args[2])
 			
-			ShowMsg (format(L["CMD_3"], GlobalIgnoreDB.defexpire, dayString(GlobalIgnoreDB.defexpire)))
+			M.ShowMsg (format(L["CMD_3"], GlobalIgnoreDB.defexpire, M.dayString(GlobalIgnoreDB.defexpire)))
 		end
 		
 	elseif msg == "asknote true" or msg == "asknote on" then
 	
 		GlobalIgnoreDB.asknote = true
-		ShowMsg (L["CMD_4"])
+		M.ShowMsg (L["CMD_4"])
 
 	elseif msg == "asknote false" or msg == "asknote off" then
 
 		GlobalIgnoreDB.asknote = false
-		ShowMsg (L["CMD_5"])
+		M.ShowMsg (L["CMD_5"])
 		
 	elseif msg == "showmsg true" or msg == "showmsg on" then
 	
 		GlobalIgnoreDB.chatmsg = true
-		ShowMsg (L["CMD_6"])
+		M.ShowMsg (L["CMD_6"])
 
 	elseif msg == "showmsg false" or msg == "showmsg off" then
 	
 		GlobalIgnoreDB.chatmsg = false	
-		ShowMsg (L["CMD_7"])
+		M.ShowMsg (L["CMD_7"])
 	
 	elseif msg == "sameserver true" or msg == "sameserver on" then
 	
 		GlobalIgnoreDB.sameserver = true
-		ShowMsg(L["CMD_10"])
+		M.ShowMsg(L["CMD_10"])
 
 	elseif msg == "sameserver false" or msg == "sameserver off" then
 	
 		GlobalIgnoreDB.sameserver = false
-		ShowMsg(L["CMD_11"])
+		M.ShowMsg(L["CMD_11"])
 		
 	elseif args[1] == "list" then
 	
@@ -2163,7 +2169,7 @@ function SlashCmdList.GIGNORE (msg)
 		
 	elseif (args[1] == "add" or args[1] == "ignore") then
 	
-		ignoreFromCmd(argStr)
+		M.ignoreFromCmd(argStr)
 
 	elseif (args[1] == "remove" or args[1] == "delete") and args[2] ~= nil and args[2] ~= "" then
 	
@@ -2172,21 +2178,21 @@ function SlashCmdList.GIGNORE (msg)
 			local str = GlobalIgnoreDB.typeList[tonumber(argStr)]
 			
 			if str == "npc" then
-				ShowMsg (format(L["CMD_12"], Proper(GlobalIgnoreDB.ignoreList[tonumber(argStr)], true)))
+				M.ShowMsg (format(L["CMD_12"], M.Proper(GlobalIgnoreDB.ignoreList[tonumber(argStr)], true)))
 				RemoveFromList(tonumber(argStr))
-				GILUpdateUI(true)
+				M.GILUpdateUI(true)
 			else
 				C_FriendList.DelIgnore(args[2], true)
 			end
 		else
-			argStr = Proper(argStr, true)
+			argStr = M.Proper(argStr, true)
 			
-			local npcIndex = hasNPCIgnored(argStr)
+			local npcIndex = M.hasNPCIgnored(argStr)
 		
 			if npcIndex > 0 then
-				ShowMsg (format(L["CMD_12"], argStr))
+				M.ShowMsg (format(L["CMD_12"], argStr))
 				RemoveFromList(npcIndex)
-				GILUpdateUI(true)
+				M.GILUpdateUI(true)
 			else	
 				C_FriendList.DelIgnore (args[2], true)
 			end
@@ -2194,13 +2200,13 @@ function SlashCmdList.GIGNORE (msg)
 		
 	elseif (args[1] == "server" or args[1] == "addserver") and args[2] ~= nil and args[2] ~= "" then
 
-		AddOrDelServer(argStr)
-		GILUpdateUI(true)
+		M.AddOrDelServer(argStr)
+		M.GILUpdateUI(true)
 
 	elseif (args[1] == "npc" or args[1] == "addnpc") then
 	
-		AddOrDelNPC(argStr)
-		GILUpdateUI(true)
+		M.AddOrDelNPC(argStr)
+		M.GILUpdateUI(true)
 		
 	elseif args[1] == "expire" and args[2] ~= nil and args[2] ~= "" and tonumber(args[3]) then
 
@@ -2210,26 +2216,26 @@ function SlashCmdList.GIGNORE (msg)
 			if (index > 0) and (index <= #GlobalIgnoreDB.ignoreList) then
 			
 				GlobalIgnoreDB.expList[index] = tonumber(args[3])
-				ShowMsg(format(L["CMD_14"], GlobalIgnoreDB.ignoreList[index], tonumber(args[3])))
+				M.ShowMsg(format(L["CMD_14"], GlobalIgnoreDB.ignoreList[index], tonumber(args[3])))
 			end
 
 		else
-			local name        = Proper(addServer(args[2]))
-			local playerIndex = hasGlobalIgnored(name)
+			local name        = M.Proper(M.addServer(args[2]))
+			local playerIndex = M.hasGlobalIgnored(name)
 
 			if playerIndex > 0 then
 				GlobalIgnoreDB.expList[playerIndex] = tonumber(args[3])
-				ShowMsg(format(L["CMD_14"], name, tonumber(args[3])))
+				M.ShowMsg(format(L["CMD_14"], name, tonumber(args[3])))
 			end
 		end
 		
 	elseif args[1] == "gui" or args[1] == "ui" then	
 	
-		GIL_GUI()
+		M.GIL_GUI()
 		
 	elseif args[1] == "sync" then
 	
-		SyncIgnoreList(false)
+		M.SyncIgnoreList(false)
 		
 	elseif args[1] == "dellist" then
 	
@@ -2241,44 +2247,44 @@ function SlashCmdList.GIGNORE (msg)
 	
 		if args[2] == "confirm" and firstPrune == true then
 		
-			PruneIgnoreList(pruneDays, true)
+			M.PruneIgnoreList(pruneDays, true)
 			
 			firstPrune = false
 		elseif args[2] == nil or tonumber(args[2]) == nil then
 		
-			ShowMsg(L["CMD_15"])
+			M.ShowMsg(L["CMD_15"])
 		else
 			if firstPrune == false then
 
 				pruneDays = tonumber(args[2])
 				
-				ShowMsg(format(L["CMD_16"], pruneDays))
-				ShowMsg(format(L["CMD_17"], PruneIgnoreList(pruneDays, false)))
+				M.ShowMsg(format(L["CMD_16"], pruneDays))
+				M.ShowMsg(format(L["CMD_17"], M.PruneIgnoreList(pruneDays, false)))
 				
 				firstPrune = true
 			end
 		end
 
 	else
-		ShowMsg (L["HELP_1"])
-		ShowMsg ("")
-		ShowMsg ("  " .. L["HELP_2"])
-		ShowMsg ("  " .. L["HELP_3"])
-		ShowMsg ("  " .. L["HELP_4"])
-		ShowMsg ("  " .. L["HELP_5"])
-		ShowMsg ("  " .. L["HELP_6"])
-		ShowMsg ("  " .. L["HELP_7"])
-		ShowMsg ("  " .. L["HELP_8"])
-		ShowMsg ("  " .. L["HELP_15"])
-		ShowMsg ("  " .. L["HELP_16"])
-		ShowMsg ("  " .. L["HELP_9"])
-		ShowMsg ("")
-		ShowMsg ("  " .. format(L["HELP_10"], OnOff(GlobalIgnoreDB.chatmsg)))
-		ShowMsg ("  " .. format(L["HELP_11"], OnOff(GlobalIgnoreDB.sameserver)))
-		ShowMsg ("  " .. format(L["HELP_12"], GlobalIgnoreDB.defexpire))
-		ShowMsg ("  " .. format(L["HELP_13"], OnOff(GlobalIgnoreDB.asknote)))
-		ShowMsg ("")
-		ShowMsg (L["HELP_14"])
+		M.ShowMsg (L["HELP_1"])
+		M.ShowMsg ("")
+		M.ShowMsg ("  " .. L["HELP_2"])
+		M.ShowMsg ("  " .. L["HELP_3"])
+		M.ShowMsg ("  " .. L["HELP_4"])
+		M.ShowMsg ("  " .. L["HELP_5"])
+		M.ShowMsg ("  " .. L["HELP_6"])
+		M.ShowMsg ("  " .. L["HELP_7"])
+		M.ShowMsg ("  " .. L["HELP_8"])
+		M.ShowMsg ("  " .. L["HELP_15"])
+		M.ShowMsg ("  " .. L["HELP_16"])
+		M.ShowMsg ("  " .. L["HELP_9"])
+		M.ShowMsg ("")
+		M.ShowMsg ("  " .. format(L["HELP_10"], OnOff(GlobalIgnoreDB.chatmsg)))
+		M.ShowMsg ("  " .. format(L["HELP_11"], OnOff(GlobalIgnoreDB.sameserver)))
+		M.ShowMsg ("  " .. format(L["HELP_12"], GlobalIgnoreDB.defexpire))
+		M.ShowMsg ("  " .. format(L["HELP_13"], OnOff(GlobalIgnoreDB.asknote)))
+		M.ShowMsg ("")
+		M.ShowMsg (L["HELP_14"])
 	end
 end
 
@@ -2317,9 +2323,9 @@ StaticPopupDialogs["GIL_PARTYWARN"] = {
 
 C_PartyInfo.InviteUnit = function (name)
 
-	name = Proper(name)
+	name = M.Proper(name)
 	
-	if hasGlobalIgnored(addServer(name)) > 0 then
+	if M.hasGlobalIgnored(M.addServer(name)) > 0 then
 		partyNameUI = name
 		
 		StaticPopup_Show("GIL_PARTYCONFIRM", partyNameUI)
@@ -2332,12 +2338,12 @@ C_FriendList.AddIgnore = function(name, noNote)
 
 	local okDisplay = true
 	
-	if (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+	if (V.GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
 		okDisplay = false
 	end
 
 	--print("DEBUG: Info sent to C_FriendList.AddIgnore name="..(name or "nil") .. " note="..(noNote or "nil"))
-	
+	local server
 	if (not name or name == "") then
 
 		name, server = UnitName("target")
@@ -2374,52 +2380,50 @@ C_FriendList.AddIgnore = function(name, noNote)
 		end
 	end
 	
-	needSorted = true
-	name	   = Proper(addServer(name))
+	V.needSorted = true
+	name	   = M.Proper(M.addServer(name))
 	
-	local tmp = removeServer(name, true)
+	local tmp = M.removeServer(name, true)
 	if (tmp == "") or (tmp == UNKNOWN) then return end
 		
-	if Proper(addServer(UnitName("player"))) ~= name then
+	if M.Proper(M.addServer(UnitName("player"))) ~= name then
 	
-		local index = hasGlobalIgnored(name)
+		local index = M.hasGlobalIgnored(name)
 	
 		if index == 0 then
 			AddToList(name, faction, note)
 			
 			if GlobalIgnoreDB.asknote == true and not noNote then
 			
-				nameUI = name				
-				StaticPopup_Show("GIL_REASON", nameUI)			
+				V.nameUI = name
+				StaticPopup_Show("GIL_REASON", V.nameUI)
 			end
 
 			if okDisplay == true then 
-				ShowMsg(format(L["ADD_2"], name))
+				M.ShowMsg(format(L["ADD_2"], name))
 			end
 			
 			if C_FriendList.GetNumIgnores() < maxIgnoreSize then
-				BlizzardAddIgnore(removeServer(name))
+				BlizzardAddIgnore(M.removeServer(name))
 			end
 		else
 			if hasIgnored(name) > 0 then
 				if okDisplay == true then
-					ShowMsg(format(L["ADD_1"], name))
+					M.ShowMsg(format(L["ADD_1"], name))
 				end
 			end
 
 			if C_FriendList.GetNumIgnores() < maxIgnoreSize then			
-				BlizzardAddIgnore(removeServer(name))
+				BlizzardAddIgnore(M.removeServer(name))
 			end
 		end
 		
 		--removeDeleted(name)
 		
-		indentUI = 0
-		
-		GILUpdateUI()
+		M.GILUpdateUI()
 	else
 		if okDisplay == true then
-			ShowMsg(L["ADD_3"])
+			M.ShowMsg(L["ADD_3"])
 		end
 	end	
 end
@@ -2435,7 +2439,7 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 
 	local okDisplay = true
 	
-	if (GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
+	if (V.GIL_InSync == true and GlobalIgnoreDB.chatmsg == false) then
 		okDisplay = false
 	end
 	
@@ -2464,42 +2468,41 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 		return
 	end
 	
-	needSorted = true	
-	name 	   = Proper(addServer(name))
+	V.needSorted = true
+	name 	   = M.Proper(M.addServer(name))
 	
---	if removeServer(name, true) ~= UNKNOWN then
+--	if M.removeServer(name, true) ~= UNKNOWN then
 
 		--addDeleted(name)
 	
-		local index = hasGlobalIgnored(name)
+		local index = M.hasGlobalIgnored(name)
 
 		if index > 0 then
 			if okDisplay == true then
-				ShowMsg(format(L["REM_1"], name))
+				M.ShowMsg(format(L["REM_1"], name))
 			end
 		
 			RemoveFromList(index)		
 		
-			name = removeServer(name)
+			name = M.removeServer(name)
 		
 			if hasIgnored(name) > 0 then
 				BlizzardDelIgnore(name)
 			else
-				GILUpdateUI()
+				M.GILUpdateUI()
 			end
 		else
 			BlizzardDelIgnore(idxpos)
 		end
 --	end
-		
-	indentUI = 0	
-	GILUpdateUI()	
+
+	M.GILUpdateUI()
 end
 
 C_FriendList.AddOrDelIgnore = function(name)
 	
 	--print ("DEBUG C_FriendList.AddOrDel called with: "..(name or "nil"))
-	
+	local server
 	if (not name or name == "") then
 
 		name, server = UnitName("target")
@@ -2528,8 +2531,8 @@ C_FriendList.AddOrDelIgnore = function(name)
 				tempName = GetUnitName(prefix..count, true)
 			
 				if tempName then
-					if removeServer(tempName, true) == name then
-						pServer = Proper(getServer(tempName), "")
+					if M.removeServer(tempName, true) == name then
+						pServer = M.Proper(M.getServer(tempName), "")
 						--print ("DEBUG matched name: "..name)
 						
 						if pServer ~= "" then
@@ -2560,10 +2563,10 @@ C_FriendList.AddOrDelIgnore = function(name)
 		                tempName = sub(msg, pos + 9, (find(msg, ":", pos + 9, true) or (find(msg, "|", pos + 10, true))) - 1)
 						
 						
-						if removeServer(tempName, true) == name then
+						if M.removeServer(tempName, true) == name then
 							--print ("DEBUG matched name: "..name)
 							
-							pServer = Proper(getServer(tempName), "")
+							pServer = M.Proper(M.getServer(tempName), "")
 						
 							if pServer ~= "" then
 								--print("DEBUG Adding possible server name by chat="..pServer)
@@ -2580,18 +2583,18 @@ C_FriendList.AddOrDelIgnore = function(name)
 		end
 		
 		--print("FINAL="..pServer.. " name="..name)
-		--ShowMsg (L["ADD_4"])
+		--M.ShowMsg (L["ADD_4"])
 	end
 
 	if (not name or name == "") then
 		return
 	end
 	
-	name = Proper(addServer(name))
+	name = M.Proper(M.addServer(name))
 	
-	if removeServer(name, true) == UNKNOWN then return end
+	if M.removeServer(name, true) == UNKNOWN then return end
 
-	local index = hasGlobalIgnored(name)
+	local index = M.hasGlobalIgnored(name)
 
 	if index == 0 then
 		--print("DEBUG calling AddIgnore="..(name or "nil"))
@@ -2604,7 +2607,7 @@ C_FriendList.AddOrDelIgnore = function(name)
 	end	
 end
 
-AddOrDelNPC = function (argStr)
+M.AddOrDelNPC = function (argStr)
 	
 	if tonumber(argStr) then
 	
@@ -2612,17 +2615,17 @@ AddOrDelNPC = function (argStr)
 		
 		if (nIndex > 0) and (nIndex <= #GlobalIgnoreDB.ignoreList) and (GlobalIgnoreDB.typeList[nIndex] == "npc") then
 				
-			ShowMsg (format(L["CMD_12"], GlobalIgnoreDB.ignoreList[nIndex]))
+			M.ShowMsg (format(L["CMD_12"], GlobalIgnoreDB.ignoreList[nIndex]))
 			RemoveFromList(nIndex)
 		end
 	else
 		
 		if argStr ~= "" then
-			argStr = (trim(Proper(argStr, true)) or "")
+			argStr = (M.trim(M.Proper(argStr, true)) or "")
 		end
 		
 		if argStr == "" then
-			argStr = Proper(UnitName("target"), true)
+			argStr = M.Proper(UnitName("target"), true)
 				
 			if argStr == nil or UnitPlayerControlled("target") then
 				argStr = ""
@@ -2631,22 +2634,22 @@ AddOrDelNPC = function (argStr)
 			
 		if argStr ~= "" then
 
-			local npcIndex = hasNPCIgnored(argStr)
+			local npcIndex = M.hasNPCIgnored(argStr)
 		
 			if npcIndex > 0 then
 				local name = GlobalIgnoreDB.ignoreList[npcIndex]
 			
-				ShowMsg (format(L["CMD_12"], name))
+				M.ShowMsg (format(L["CMD_12"], name))
 				RemoveFromList(npcIndex)
 			else
-				ShowMsg (format(L["CMD_13"], argStr))
+				M.ShowMsg (format(L["CMD_13"], argStr))
 				AddToList(argStr, faction, "", "npc")
 			end
 		end
 	end
 end
 
-AddOrDelServer = function (sName)
+M.AddOrDelServer = function (sName)
 
 	if not sName then return end
 
@@ -2656,24 +2659,24 @@ AddOrDelServer = function (sName)
 		
 		if (sIndex > 0) and (sIndex <= #GlobalIgnoreDB.ignoreList) and (GlobalIgnoreDB.typeList[sIndex] == "server") then
 		
-			ShowMsg(format(L["CMD_19"], GlobalIgnoreDB.ignoreList[sIndex]))
+			M.ShowMsg(format(L["CMD_19"], GlobalIgnoreDB.ignoreList[sIndex]))
 			RemoveFromList(sIndex)
 		end
 	
 	else
 	
-		sName = Proper(sName)
+		sName = M.Proper(sName)
 		
 		local sIndex = hasServerIgnored(sName)
 		
 		if sIndex > 0 then
 		
-			ShowMsg(format(L["CMD_19"], sName))
+			M.ShowMsg(format(L["CMD_19"], sName))
 			RemoveFromList(sIndex)
 	
 		else
 		
-			ShowMsg(format(L["CMD_18"], sName))
+			M.ShowMsg(format(L["CMD_18"], sName))
 			AddToList(sName, faction, "", "server")
 		end
 	end
