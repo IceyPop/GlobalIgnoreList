@@ -1,2 +1,7 @@
 package.bat
 *.zip
+GlobalIgnoreList_Vanilla.toc
+GlobalIgnoreList_TBC.toc
+GlobalIgnoreList_Wrath.toc
+GlobalIgnoreList_Cata.toc
+GlobalIgnoreList_Mists.toc
