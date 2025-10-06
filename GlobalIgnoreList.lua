@@ -6,10 +6,10 @@ local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.GIL_Loaded				= false
-V.GIL_SyncOK				= false
+V.GIL_Loaded			= false
+V.GIL_SyncOK			= false
 V.GIL_SyncTried			= false
-V.GIL_InSync				= false
+V.GIL_InSync			= false
 V.lastFilterError		= false
 
 local GILFRAME			= nil
@@ -21,7 +21,7 @@ local doLoginIgnore		= true
 local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
-local maxHistorySize	= 200
+local maxHistorySize	= 250
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
@@ -50,12 +50,6 @@ local BlizzardDelIgnore			= nil
 local BlizzardDelIgnoreByIndex	= nil
 local BlizzardAddOrDelIgnore	= nil
 local BlizzardInviteUnit		= nil
-
---if V.wowIsERA == true then print("DEBUG WOW IS ERA") end
---if V.wowIsTBC == true then print("DEBUG WOW IS TBC") end
---if V.wowIsWrath == true then print("DEBUG WOW IS WRATH") end
---if V.wowIsRetail == true then print("DEBUG WOW IS RETAIL") end
---if V.wowIsClassic == true then print("DEBUG WOW IS CLASSIC") end
 
 ----------------------------------
 -- Global Ignore List Functions --
@@ -656,9 +650,9 @@ function M.SyncIgnoreList (silent)
 		
 			if GlobalIgnoreDB.typeList[key] == "player" then
 		
-				local name = M.addServer(value)
+				local name = M.Proper(M.addServer(value))
 				
-				--print("DEBUG processing: ".. name .. " ignored? ".. hasIgnored(name));
+				print("DEBUG processing: ".. name .. " ignored? ".. hasIgnored(name));
 				
 				if hasIgnored(name) == 0 then
 					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
@@ -672,7 +666,7 @@ function M.SyncIgnoreList (silent)
 						
 						setSyncValue(name, key)
 						
-						name = M.removeServer(name)
+						--name = M.removeServer(name)
 
 						if not silent then
 							M.ShowMsg (format(L["SYNC_2"], name))
@@ -1034,7 +1028,6 @@ end
 
 local function EventHandler (self, event, sender, ...)
 
-	--print ("DEBUG event=".. (event or "nil"))
 	--print ("DEBUG event=".. (event or "nil") .. " sender=" .. (sender or "nil"))
 	
 	--if (event == "CHANNEL_INVITE_REQUEST") then
@@ -1068,7 +1061,7 @@ local function EventHandler (self, event, sender, ...)
 				name = GetUnitName(prefix..count, true)
 			
 				if name then
-					name = M.addServer(name)
+					name = M.Proper(M.addServer(name))
 					
 					if M.hasGlobalIgnored(name) > 0 and M.hasGroupWarning(name) == 0 then
 						doWarn = true
@@ -1093,7 +1086,7 @@ local function EventHandler (self, event, sender, ...)
 	
 	if event == "PARTY_INVITE_REQUEST" and V.GIL_Loaded == true then
 	
-		sender = M.addServer(sender)
+		sender = M.Proper(M.addServer(sender))
 
 		if M.hasGlobalIgnored(sender) > 0 then
 			DeclineGroup()			
@@ -1107,8 +1100,8 @@ local function EventHandler (self, event, sender, ...)
 		return
 	end
 	
-	if event == "DUEL_REQUESTED" and V.GIL_Loaded == true then
-		sender = M.addServer(sender)
+	if event == "GUILD_INVITE_REQUEST" and V.GIL_Loaded == true then
+		sender = M.Proper(M.addServer(sender))
 		
 		if M.hasGlobalIgnored(sender) > 0 then
 			DeclineGuild()
@@ -1121,7 +1114,7 @@ local function EventHandler (self, event, sender, ...)
 	end
 	
 	if event == "DUEL_REQUESTED" and V.GIL_Loaded == true then
-		sender = M.addServer(sender)
+		sender = M.Proper(M.addServer(sender))
 		
 		if M.hasGlobalIgnored(sender) > 0 then
 			CancelDuel()
@@ -1352,8 +1345,6 @@ function M.filterComplex (filterStr, chatStr, chNumber, chName)
 	local hasMount		= find(chatStr, "|hmount:", 1, true)
 	local hasOutfit		= find(chatStr, "|houtfit:", 1, true)
 	
-	--print ("HasTrade=" .. (hasTrade or "nil"))
-
 	--print("After="..gsub(chatStr, "\124", "\124\124"))
 	
 	for word in gmatch(chatStr, "%S+") do
@@ -1365,8 +1356,6 @@ function M.filterComplex (filterStr, chatStr, chNumber, chName)
 			--print("word="..gsub(word, "\124", "\124\124"))			
 		end		
 	end
-	
-	--print ("DEBUG filter word count is " .. #chatData)
 	
 	-----------	
 	
@@ -1903,13 +1892,12 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 		return false
 
 	elseif (from ~= nil) and (from ~= "") then
-			
 		local idx = string.find(from, "-", 1, true)
 		
 		if idx == nil then
-			from = from .. "-" .. V.serverName
+			from = M.Proper(from .. "-" .. V.serverName)
 		else
-			from = string.sub(from, 1, idx - 1) .. "-" .. M.Proper(string.sub(from, idx + 1, string.len(from)))
+			from = M.Proper(string.sub(from, 1, idx - 1) .. "-" ..string.sub(from, idx + 1, string.len(from)))
 		end
 				
 		if M.hasGlobalIgnored(from) > 0 or hasServerIgnored(M.getServer(from)) > 0 then

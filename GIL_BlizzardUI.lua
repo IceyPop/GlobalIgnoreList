@@ -82,7 +82,7 @@ function M.GIL_LFG_ApplicantMenu(owner, root, contextData)
 	
 	if not info.leaderName or info.leaderName == "" then return end
 	
-	local target = M.addServer(info.leaderName)
+	local target = M.Proper(M.addServer(info.leaderName))
 	local text   = ""
 	
 	if (M.hasGlobalIgnored(target) > 0) then
