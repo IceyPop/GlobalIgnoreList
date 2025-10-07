@@ -22,6 +22,7 @@ local Tab2EditDesc			= ""
 local Tab2EditFilter		= ""
 local Tab2EditActive		= false
 local Tab3Frame				= nil
+local Tab4Frame				= nil
 local columnCount			= 0
 local IgnoreScrollFrame		= nil
 local IgnoreScrollButtons	= {}
@@ -31,6 +32,9 @@ local IgnoreScrollSelect	= 0
 local FilterScrollFrame		= nil
 local FilterScrollButtons	= {}
 local FilterScrollSelect	= 0
+local LogScrollFrame			= nil
+local LogScrollButtons    = {}
+local LogScrollFilterNum	= nil
 local WINDOW_WIDTH			= 734
 local WINDOW_HEIGHT			= 400
 local WINDOW_OFFSET			= 113
@@ -47,7 +51,9 @@ local COL_DESC				= 210
 local COL_STATE				= 26
 local COL_FILTER			= 366
 local COL_BLOCKED			= 52
-local COL_INFOTEXT			= 400
+local COL_INFOTEXT		= 400
+local COL_LOGTIME			= 150
+local COL_LOGMSG			= 520
 
 -------------------------
 -- DIALOGS AND BUTTONS --
@@ -254,6 +260,102 @@ local function ButtonIgnoreRemove()
 	elseif typeStr == "server" then
 		M.AddOrDelServer(idx)
 		M.GILUpdateUI()
+	end
+end
+
+--------------------------
+-- FILTER LOG SCROLLER  --
+--------------------------
+
+function M.LogListDrawUpdate (self, filterNum)
+	-- trivial checks
+	local self = self or LogScrollFrame
+	if not self then return end
+	if not self:GetParent():IsVisible() then return end
+	if filterNum and (filterNum ~= LogScrollFilterNum) then return end
+
+	if not (LogScrollFilterNum and GlobalIgnoreDB.filterLogs[LogScrollFilterNum]) then
+		for count = 1, BUTTON_TOTAL do
+			LogScrollButtons[count].name:SetText("")
+			LogScrollButtons[count].message:SetText("")
+			LogScrollButtons[count].tooltip = nil
+			LogScrollButtons[count]:Hide()
+		end
+		return
+	end
+	local records = GlobalIgnoreDB.filterLogs[LogScrollFilterNum]
+	local num_records = #records
+	FauxScrollFrame_Update(self, num_records, BUTTON_TOTAL, BUTTON_HEIGHT)
+
+	local offset = FauxScrollFrame_GetOffset(self)
+	local index  = 0
+
+	for count = 1, BUTTON_TOTAL do
+		index = count + offset
+		if index <= num_records then
+			-- latest first
+			local reverse_index = num_records-index+1
+			LogScrollButtons[count].name:SetText(records[reverse_index].t)
+			LogScrollButtons[count].message:SetText(records[reverse_index].m)
+			LogScrollButtons[count].tooltip = {source=records[reverse_index].s, channel=records[reverse_index].n}
+
+			LogScrollButtons[count]:Show()
+		else
+			LogScrollButtons[count]:Hide()
+		end
+	end
+
+end
+
+local function CreateLogButtons()
+	LogScrollButtons = {}
+
+	for count = 1, BUTTON_TOTAL do
+
+		if V.wowIsClassic == true then
+			LogScrollButtons[count] = CreateFrame("Button", nil, LogScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
+		else
+			LogScrollButtons[count] = CreateFrame("Button", nil, LogScrollFrame:GetParent(), "IgnoreListButtonTemplate")
+		end
+
+		if count == 1 then
+			LogScrollButtons[count]:SetPoint("TOPLEFT", LogScrollFrame, -1, 0)
+		else
+			LogScrollButtons[count]:SetPoint("TOP", LogScrollButtons[count - 1], "BOTTOM")
+		end
+
+		LogScrollButtons[count]:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
+		LogScrollButtons[count]:EnableMouse(true)
+		LogScrollButtons[count]:SetScript("OnEnter", M.LogScrollOnEnter)
+		LogScrollButtons[count]:SetScript("OnLeave", M.LogScrollOnLeave)
+		LogScrollButtons[count]:SetScript("OnHide", M.LogScrollOnLeave)
+
+		-- set time style
+		LogScrollButtons[count].name:SetWidth(COL_LOGTIME)
+
+		-- create message style
+		LogScrollButtons[count].message = LogScrollButtons[count]:CreateFontString("FontString", "OVERLAY", "GameFontHighlight")
+		LogScrollButtons[count].message:SetPoint("LEFT", LogScrollButtons[count].name, "RIGHT", 6, 0)
+		LogScrollButtons[count].message:SetWidth(COL_LOGMSG)
+		LogScrollButtons[count].message:SetJustifyH("LEFT")
+		LogScrollButtons[count].message:SetWordWrap(false)
+	end
+
+	M.LogListDrawUpdate(LogScrollFrame)
+end
+
+function M.LogScrollOnEnter (self)
+	if self.tooltip then
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddDoubleLine(L["TIP_3"],self.tooltip.channel)
+		GameTooltip:AddDoubleLine(L["TIP_4"],self.tooltip.source)
+		GameTooltip:Show()
+	end
+end
+
+function M.LogScrollOnLeave (self)
+	if GameTooltip:IsOwned(self) then
+		GameTooltip_Hide()
 	end
 end
 
@@ -999,6 +1101,7 @@ local function CreateUIFrames()
 	
 	Tab1Button:SetScript("OnClick",
 		function(self)
+			Tab4Frame:Hide()
 			Tab3Frame:Hide()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
@@ -1016,6 +1119,7 @@ local function CreateUIFrames()
 		function(self)
 			Tab1Frame:Hide()
 			Tab3Frame:Hide()
+			Tab4Frame:Hide()
 			
 			if Tab2EditState == true then
 				Tab2FrameEdit:Show()
@@ -1039,10 +1143,26 @@ local function CreateUIFrames()
 			Tab1Frame:Hide()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
+			Tab4Frame:Hide()
 			Tab3Frame:Show()
 			PanelTemplates_SetTab(MainFrame, 3)
 		end)
 		
+	local Tab4Button = CreateFrame("Button", "GILTab4", MainFrame, C_EditMode and "CharacterFrameTabTemplate" or "CharacterFrameTabButtonTemplate")
+
+	Tab4Button:SetPoint("LEFT", "GILTab3", "RIGHT", -16, 0)
+	Tab4Button:SetText(L["TAB_4"])
+	Tab4Button:SetID("4")
+
+	Tab4Button:SetScript("OnClick",
+		function(self)
+			Tab1Frame:Hide()
+			Tab2Frame:Hide()
+			Tab2FrameEdit:Hide()
+			Tab3Frame:Hide()
+			Tab4Frame:Show()
+			PanelTemplates_SetTab(MainFrame, 4)
+		end)
 	------------------
 	-- TAB 1 FRAMES --
 	------------------
@@ -1394,102 +1514,160 @@ local function CreateUIFrames()
 	------------------
 	-- TAB 3 FRAMES --
 	------------------	
-	
+
 	Tab3Frame = CreateFrame("ScrollFrame", "GILFrame3", MainFrame, "InsetFrameTemplate")
 	Tab3Frame:Hide()
 
 	Tab3Frame:SetWidth(WINDOW_WIDTH - 19)
-	Tab3Frame:SetHeight(WINDOW_HEIGHT - WINDOW_OFFSET + 20)
-	Tab3Frame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -64)
-	
-	Tab3Frame.ScrollFrame = CreateFrame("ScrollFrame", "GILSlate3", Tab3Frame, "UIPanelScrollFrameTemplate");
-	Tab3Frame.Slate = CreateFrame("Frame");
-	
-	local name				= Tab3Frame.ScrollFrame:GetName();
-	Tab3Frame.ScrollBar		= _G[name.."ScrollBar"];
-	Tab3Frame.ScrollUp		= _G[name.."ScrollBarScrollUpButton"];
-	Tab3Frame.ScrollDown	= _G[name.."ScrollBarScrollDownButton"];
- 
-	Tab3Frame.ScrollUp:ClearAllPoints();
-	Tab3Frame.ScrollUp:SetPoint("TOPRIGHT", Tab3Frame.ScrollFrame, "TOPRIGHT", -2, -2);
- 
-	Tab3Frame.ScrollDown:ClearAllPoints();
-	Tab3Frame.ScrollDown:SetPoint("BOTTOMRIGHT", Tab3Frame.ScrollFrame, "BOTTOMRIGHT", -2, 2);
- 
-	Tab3Frame.ScrollBar:ClearAllPoints();
-	Tab3Frame.ScrollBar:SetPoint("TOP", Tab3Frame.ScrollUp, "BOTTOM", 0, -2);
-	Tab3Frame.ScrollBar:SetPoint("BOTTOM", Tab3Frame.ScrollDown, "TOP", 0, 2);
- 
-	Tab3Frame.ScrollFrame:SetScrollChild(Tab3Frame.Slate);	
-	Tab3Frame.ScrollFrame:SetAllPoints(Tab3Frame);
- 
+	Tab3Frame:SetHeight(WINDOW_HEIGHT - WINDOW_OFFSET)
+	Tab3Frame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -84)
+
+	createColumn(L["COL_12"], COL_LOGTIME + 10,Tab3Frame)
+	createColumn(L["COL_13"], COL_LOGMSG + 12, Tab3Frame)
+
+	LogScrollFrame = CreateFrame("ScrollFrame", "GILLogScrollFrame", Tab3Frame, "FauxScrollFrameTemplate")
+
+	LogScrollFrame:SetWidth  (WINDOW_WIDTH - 46)
+	LogScrollFrame:SetHeight (BUTTON_TOTAL * BUTTON_HEIGHT)
+	LogScrollFrame:SetPoint  ("TOPLEFT", 0, -4)
+
+	LogScrollFrame:SetScript("OnVerticalScroll",
+		function(self, offset)
+			FauxScrollFrame_OnVerticalScroll(self, offset, BUTTON_HEIGHT, M.LogListDrawUpdate)
+		end)
+
+	CreateLogButtons()
+
+	local filterData = {}
+	local function getActiveFilterData()
+		wipe(filterData)
+		for filterNum,active in ipairs(GlobalIgnoreDB.filterActive) do
+			if active then
+				filterData[filterNum] = filterData[filterNum] or {}
+				filterData[filterNum].filterDesc = GlobalIgnoreDB.filterDesc[filterNum]
+				filterData[filterNum].filterCount = GlobalIgnoreDB.filterCount[filterNum]
+				filterData[filterNum].id = filterNum
+			end
+		end
+		return filterData
+	end
+
+	local Drop = CreateFrame("DropdownButton", "GILFrame4FilterMenu", Tab3Frame, "WowStyle1DropdownTemplate")
+	Drop:SetDefaultText(NONE)
+	Drop:SetPoint("TOP", Tab3Frame, "TOP", 0, 55)
+	Drop:SetWidth(225)
+
+	Drop:SetupMenu(function(self, root)
+		local entries = getActiveFilterData()
+		for filterNum, filtered in pairs(entries) do
+			root:CreateButton(filtered.filterDesc, function(data)
+				self:SetDefaultText(data.filterDesc)
+				LogScrollFilterNum = data.id
+				M.LogListDrawUpdate(LogScrollFrame)
+			end,
+			filtered)
+		end
+	end)
+
+	------------------
+	-- TAB 4 FRAMES --
+	------------------
+
+	Tab4Frame = CreateFrame("ScrollFrame", "GILFrame4", MainFrame, "InsetFrameTemplate")
+	Tab4Frame:Hide()
+
+	Tab4Frame:SetWidth(WINDOW_WIDTH - 19)
+	Tab4Frame:SetHeight(WINDOW_HEIGHT - WINDOW_OFFSET + 20)
+	Tab4Frame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -64)
+
+	Tab4Frame.ScrollFrame = CreateFrame("ScrollFrame", "GILSlate4", Tab4Frame, "UIPanelScrollFrameTemplate");
+	Tab4Frame.Slate = CreateFrame("Frame");
+
+	local name				= Tab4Frame.ScrollFrame:GetName();
+	Tab4Frame.ScrollBar		= _G[name.."ScrollBar"];
+	Tab4Frame.ScrollUp		= _G[name.."ScrollBarScrollUpButton"];
+	Tab4Frame.ScrollDown	= _G[name.."ScrollBarScrollDownButton"];
+
+	Tab4Frame.ScrollUp:ClearAllPoints();
+	Tab4Frame.ScrollUp:SetPoint("TOPRIGHT", Tab4Frame.ScrollFrame, "TOPRIGHT", -2, -2);
+
+	Tab4Frame.ScrollDown:ClearAllPoints();
+	Tab4Frame.ScrollDown:SetPoint("BOTTOMRIGHT", Tab4Frame.ScrollFrame, "BOTTOMRIGHT", -2, 2);
+
+	Tab4Frame.ScrollBar:ClearAllPoints();
+	Tab4Frame.ScrollBar:SetPoint("TOP", Tab4Frame.ScrollUp, "BOTTOM", 0, -2);
+	Tab4Frame.ScrollBar:SetPoint("BOTTOM", Tab4Frame.ScrollDown, "TOP", 0, 2);
+
+	Tab4Frame.ScrollFrame:SetScrollChild(Tab4Frame.Slate);
+	Tab4Frame.ScrollFrame:SetAllPoints(Tab4Frame);
+
 	-- Plot options on our scrolling slate
-	
-	Tab3Frame.Slate:SetSize(Tab3Frame:GetWidth(), (Tab3Frame:GetHeight() + 120));
-	
+
+	Tab4Frame.Slate:SetSize(Tab4Frame:GetWidth(), (Tab4Frame:GetHeight() + 120));
+
 	-- Ignore options
- 
-	Text = Tab3Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
-	Text:SetPoint("TOPLEFT", Tab3Frame.Slate, "TOPLEFT", 16, -10)
+
+	Text = Tab4Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+	Text:SetPoint("TOPLEFT", Tab4Frame.Slate, "TOPLEFT", 16, -10)
 	Text:SetWidth(200)
 	Text:SetJustifyH("LEFT");
 	Text:SetText(L["OPT_8"])
-	
-	Button = CreateFrame("CheckButton", "GILFrame3AskNote", Tab3Frame.Slate, "UICheckButtonTemplate")	
+
+	Button = CreateFrame("CheckButton", "GILFrame4AskNote", Tab4Frame.Slate, "UICheckButtonTemplate")
 	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 14, -10)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_1"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.asknote == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.asknote = (self:GetChecked() or false) end) 
-	
-	Button = CreateFrame("CheckButton", "GILFrame3SameServer", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3AskNote, "BOTTOMLEFT", 0, 6)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.asknote = (self:GetChecked() or false) end)
+
+	Button = CreateFrame("CheckButton", "GILFrame4SameServer", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4AskNote, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_4"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.sameserver == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.sameserver = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.sameserver = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SameFaction", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3SameServer, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4SameFaction", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SameServer, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_27"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.samefaction == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.samefaction = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.samefaction = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3TrackChanges", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3SameFaction, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4TrackChanges", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SameFaction, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_6"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.trackChanges == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.trackChanges = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.trackChanges = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SyncMsgs", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3TrackChanges, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4SyncMsgs", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4TrackChanges, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_26"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.chatmsg == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.chatmsg = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.chatmsg = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3ShowDeclines", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3SyncMsgs, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4ShowDeclines", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SyncMsgs, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_28"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.showDeclines == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showDeclines = (self:GetChecked() or false) end) 
-	
-	Button = CreateFrame("CheckButton", "GILFrame3SyncWarning", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3ShowDeclines, "BOTTOMLEFT", 0, 6)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showDeclines = (self:GetChecked() or false) end)
+
+	Button = CreateFrame("CheckButton", "GILFrame4SyncWarning", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4ShowDeclines, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_18"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.showWarning == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showWarning = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showWarning = (self:GetChecked() or false) end)
 
-	Button = Tab3Frame.Slate:CreateFontString("GILFrame3ExpText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3SyncWarning, "BOTTOMLEFT", 6, -4)
+	Button = Tab4Frame.Slate:CreateFontString("GILFrame4ExpText", "OVERLAY", "GameFontHighlight")
+	Button:SetPoint("TOPLEFT", GILFrame4SyncWarning, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_5"])
 
-	Button = CreateFrame("EditBox", "GILFrame3Exp", Tab3Frame.Slate, "InputBoxTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3ExpText, "TOPRIGHT", 6, 4)
+	Button = CreateFrame("EditBox", "GILFrame4Exp", Tab4Frame.Slate, "InputBoxTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4ExpText, "TOPRIGHT", 6, 4)
 	Button:SetWidth(50)
 	Button:SetHeight(20)
 	Button:SetAutoFocus(false)
@@ -1498,40 +1676,40 @@ local function CreateUIFrames()
 	Button:SetScript("OnEscapePressed", function(self) self:SetText(GlobalIgnoreDB.defexpire) end)
 
 	-- Chat filter options
-	
-	Text = Tab3Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
-	Text:SetPoint("TOPLEFT", GILFrame3ExpText, "BOTTOMLEFT", -18, -20)
+
+	Text = Tab4Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+	Text:SetPoint("TOPLEFT", GILFrame4ExpText, "BOTTOMLEFT", -18, -20)
 	Text:SetWidth(200)
 	Text:SetJustifyH("LEFT");
 	Text:SetText(L["OPT_9"]);
 
-	Button = CreateFrame("CheckButton", "GILFrame3EnableFilter", Tab3Frame.Slate, "UICheckButtonTemplate")
+	Button = CreateFrame("CheckButton", "GILFrame4EnableFilter", Tab4Frame.Slate, "UICheckButtonTemplate")
 	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 12, -6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_7"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.spamFilter == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.spamFilter = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3InvertFilter", Tab3Frame.Slate, "UICheckButtonTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3EnableFilter, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4InvertFilter", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4EnableFilter, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_10"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.invertSpam == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.invertSpam = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3UpdateFilter", Tab3Frame.Slate, "UICheckButtonTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3InvertFilter, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4UpdateFilter", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4InvertFilter, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_11"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.autoUpdate == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.autoUpdate = (self:GetChecked() or false) end)
 
-	-- Flood Dropdown 
-	
-	Button = Tab3Frame.Slate:CreateFontString("GILFrame3FloodText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3UpdateFilter, "BOTTOMLEFT", 6, -4)
+	-- Flood Dropdown
+
+	Button = Tab4Frame.Slate:CreateFontString("GILFrame4FloodText", "OVERLAY", "GameFontHighlight")
+	Button:SetPoint("TOPLEFT", GILFrame4UpdateFilter, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_20"])
-	
+
 	local function getFloodType()
 		if GlobalIgnoreDB.floodFilter == 0 then
 			return L["OPT_21"]
@@ -1541,10 +1719,10 @@ local function CreateUIFrames()
 			return L["OPT_23"]
 		end
 	end
-	
-	local Drop = CreateFrame("DropdownButton", "GILFrame3FloodMenu", Tab3Frame.Slate, "WowStyle1DropdownTemplate")
+
+	local Drop = CreateFrame("DropdownButton", "GILFrame4FloodMenu", Tab4Frame.Slate, "WowStyle1DropdownTemplate")
 	Drop:SetDefaultText(getFloodType())
-	Drop:SetPoint("TOPLEFT", GILFrame3FloodText, "TOPRIGHT", 0, 6)
+	Drop:SetPoint("TOPLEFT", GILFrame4FloodText, "TOPRIGHT", 0, 6)
 	Drop:SetWidth(180)
 
 	Drop:SetupMenu(function(self, root)
@@ -1553,79 +1731,79 @@ local function CreateUIFrames()
 		root:CreateButton(L["OPT_23"], function() GlobalIgnoreDB.floodFilter = 2 self:SetDefaultText(getFloodType()) end)
 	end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SkipGuild", Tab3Frame.Slate, "UICheckButtonTemplate")
+	Button = CreateFrame("CheckButton", "GILFrame4SkipGuild", Tab4Frame.Slate, "UICheckButtonTemplate")
 	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 450, -6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_12"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.skipGuild == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.skipGuild = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SkipParty", Tab3Frame.Slate, "UICheckButtonTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3SkipGuild, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4SkipParty", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SkipGuild, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_13"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.skipParty == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.skipParty = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SkipPrivate", Tab3Frame.Slate, "UICheckButtonTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3SkipParty, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4SkipPrivate", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SkipParty, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_14"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.skipPrivate == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.skipPrivate = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3SkipYourself", Tab3Frame.Slate, "UICheckButtonTemplate")
-	Button:SetPoint("TOPLEFT", GILFrame3SkipPrivate, "BOTTOMLEFT", 0, 6)
+	Button = CreateFrame("CheckButton", "GILFrame4SkipYourself", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4SkipPrivate, "BOTTOMLEFT", 0, 6)
 	 _G[Button:GetName().."Text"]:SetText(L["OPT_19"])
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.skipYourself == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.skipYourself = (self:GetChecked() or false) end)
-	
+
 	-- UI Options
-	
-	Text = Tab3Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+
+	Text = Tab4Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
 	Text:SetWidth(200)
-	Text:SetPoint("TOPLEFT", GILFrame3UpdateFilter, "BOTTOMLEFT", -10, -40)
+	Text:SetPoint("TOPLEFT", GILFrame4UpdateFilter, "BOTTOMLEFT", -10, -40)
 	Text:SetJustifyH("LEFT");
 	Text:SetText(L["OPT_15"])
 
-	Button = CreateFrame("CheckButton", "GILFrame3OpenUI", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button = CreateFrame("CheckButton", "GILFrame4OpenUI", Tab4Frame.Slate, "UICheckButtonTemplate")
 	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 12, -4)
 	_G[Button:GetName().."Text"]:SetText(L["OPT_2"])
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.openWithFriends == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.openWithFriends = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.openWithFriends = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3HackUnit", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3OpenUI, "BOTTOMLEFT", 0, 4)
+	Button = CreateFrame("CheckButton", "GILFrame4HackUnit", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4OpenUI, "BOTTOMLEFT", 0, 4)
 	_G[Button:GetName().."Text"]:SetText(L["OPT_16"])
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.useUnitHacks == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useUnitHacks = (self:GetChecked() or false) end) 
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useUnitHacks = (self:GetChecked() or false) end)
 
-	Button = CreateFrame("CheckButton", "GILFrame3HackLFG", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3HackUnit, "BOTTOMLEFT", 0, 4)
+	Button = CreateFrame("CheckButton", "GILFrame4HackLFG", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4HackUnit, "BOTTOMLEFT", 0, 4)
 	_G[Button:GetName().."Text"]:SetText(L["OPT_17"])
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.useLFGHacks == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useLFGHacks = (self:GetChecked() or false) end) 
-	
-	Button = CreateFrame("CheckButton", "GILFrame3IgnoreResponse", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3HackLFG, "BOTTOMLEFT", 0, 4)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useLFGHacks = (self:GetChecked() or false) end)
+
+	Button = CreateFrame("CheckButton", "GILFrame4IgnoreResponse", Tab4Frame.Slate, "UICheckButtonTemplate")
+	Button:SetPoint("TOPLEFT", GILFrame4HackLFG, "BOTTOMLEFT", 0, 4)
 	_G[Button:GetName().."Text"]:SetText(L["OPT_24"])
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.ignoreResponse == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.ignoreResponse = (self:GetChecked() or false) end) 
-	
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.ignoreResponse = (self:GetChecked() or false) end)
+
 	-- Strata dropdown
-	
-	Button = Tab3Frame.Slate:CreateFontString("GILFrame3StrataText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3IgnoreResponse, "BOTTOMLEFT", 6, -4)
+
+	Button = Tab4Frame.Slate:CreateFontString("GILFrame4StrataText", "OVERLAY", "GameFontHighlight")
+	Button:SetPoint("TOPLEFT", GILFrame4IgnoreResponse, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_25"])
-	
-	local Drop = CreateFrame("DropdownButton", "GILFrame3StrataMenu", Tab3Frame.Slate, "WowStyle1DropdownTemplate")
+
+	local Drop = CreateFrame("DropdownButton", "GILFrame4StrataMenu", Tab4Frame.Slate, "WowStyle1DropdownTemplate")
 	Drop:SetDefaultText(getFrameStrata())
-	Drop:SetPoint("TOPLEFT", GILFrame3StrataText, "TOPRIGHT", 0, 6)
+	Drop:SetPoint("TOPLEFT", GILFrame4StrataText, "TOPRIGHT", 0, 6)
 	Drop:SetWidth(100)
 
 	Drop:SetupMenu(function(self, root)
@@ -1633,14 +1811,14 @@ local function CreateUIFrames()
 		root:CreateButton("MEDIUM", function() GlobalIgnoreDB.frameStrata = 1 self:SetDefaultText(getFrameStrata()) end)
 		root:CreateButton("HIGH", function() GlobalIgnoreDB.frameStrata = 2 self:SetDefaultText(getFrameStrata()) end)
 		root:CreateButton("DIALOG", function() GlobalIgnoreDB.frameStrata = 3 self:SetDefaultText(getFrameStrata()) end)
-		
+
 	end)
 
 	----------
 	-- SHOW --
 	----------
 	
-	PanelTemplates_SetNumTabs(MainFrame, 3)
+	PanelTemplates_SetNumTabs(MainFrame, 4)
 	PanelTemplates_SetTab(MainFrame, 1)
 	
 	MainFrame:Show()

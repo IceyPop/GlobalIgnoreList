@@ -6,10 +6,10 @@ local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.GIL_Loaded			= false
-V.GIL_SyncOK			= false
+V.GIL_Loaded				= false
+V.GIL_SyncOK				= false
 V.GIL_SyncTried			= false
-V.GIL_InSync			= false
+V.GIL_InSync				= false
 V.lastFilterError		= false
 
 local GILFRAME			= nil
@@ -22,6 +22,7 @@ local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
 local maxHistorySize	= 250
+local maxLogSize      = 50
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
@@ -165,11 +166,30 @@ local function RemoveFromList(index)
 	end
 end
 	
+
+local function AddToLog(filterNum, message, chNumber, chName, from)
+	local logs = GlobalIgnoreDB.filterLogs or {}
+	GlobalIgnoreDB.filterLogs = logs
+	logs[filterNum] = logs[filterNum] or {}
+	local filterLog = logs[filterNum]
+  local over = #filterLog - maxLogSize+1
+  if over > 0 and not InCombatLockdown() then
+    for i=1,over do
+      table.remove(filterLog,1)
+    end
+  end
+  local timestamp = date("%Y.%m.%d %H:%M:%S",GetServerTime()) -- YYYY.MM.DD HH:MM:SS
+  table.insert(filterLog,{m=message,c=chNumber,n=chName,i=filterNum,s=from,t=timestamp})
+  M.LogListDrawUpdate(nil,filterNum)
+end
+
+
 function M.RemoveChatFilter (index)
 	if index <= #GlobalIgnoreDB.filterList then
 		table.remove(GlobalIgnoreDB.filterList,		index)
 		table.remove(GlobalIgnoreDB.filterDesc,		index)
 		table.remove(GlobalIgnoreDB.filterCount,	index)
+		table.remove(GlobalIgnoreDB.filterLogs,   index)
 		table.remove(GlobalIgnoreDB.filterActive,	index)
 		table.remove(GlobalIgnoreDB.filterID,		index)
 	end
@@ -402,6 +422,7 @@ function M.ResetSpamFilters()
 	GlobalIgnoreDB.filterList   = {}
 	GlobalIgnoreDB.filterDesc   = {}
 	GlobalIgnoreDB.filterCount  = {}
+	GlobalIgnoreDB.filterLogs   = {}
 	GlobalIgnoreDB.filterActive = {}
 	GlobalIgnoreDB.filterID		= {}
 	
@@ -450,6 +471,7 @@ local function ResetIgnoreDB()
 		syncInfo		= {},
 		filterTotal		= 0,
 		filterCount		= {},
+		filterLogs    = {},
 		filterDesc		= {},
 		filterList		= {},
 		filterID		= {},
@@ -536,7 +558,7 @@ function M.SyncIgnoreList (silent)
 				
 				if (tmp ~= "") and (tmp ~= UNKNOWN) then
 					name = M.Proper(M.addServer(C_FriendList.GetIgnoreName(count)))
-					
+
 					if M.hasGlobalIgnored(name) == 0 then
 						added = added + 1
 						
@@ -601,7 +623,7 @@ function M.SyncIgnoreList (silent)
 				if GlobalIgnoreDB.trackChanges == true then
 			
 					local idx = hasDeleted(name)
-					
+				
 					if idx == 0 then
 						M.debugMsg ("New player "..name.. " found on character, adding to Global Ignore List")
 						skipRemove = true
@@ -1349,7 +1371,7 @@ function M.filterComplex (filterStr, chatStr, chNumber, chName)
 	local hasJournal	= find(chatStr, "|hjournal:", 1, true)
 	local hasMount		= find(chatStr, "|hmount:", 1, true)
 	local hasOutfit		= find(chatStr, "|houtfit:", 1, true)
-	
+
 	--print("After="..gsub(chatStr, "\124", "\124\124"))
 	
 	for word in gmatch(chatStr, "%S+") do
@@ -1999,7 +2021,8 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					else
 						GlobalIgnoreDB.filterTotal				= GlobalIgnoreDB.filterTotal + 1
 						GlobalIgnoreDB.filterCount[filterNum]	= GlobalIgnoreDB.filterCount[filterNum] + 1
-							
+						AddToLog(filterNum, message, chNumber, chName, (from or UNKNOWN))
+
 						M.GILUpdateChatCount()
 					end
 							
