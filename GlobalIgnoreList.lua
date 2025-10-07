@@ -1146,6 +1146,19 @@ local function EventHandler (self, event, sender, ...)
 		return
 	end
 
+	if event == "TRADE_REQUEST" and V.GIL_Loaded == true then
+		sender = M.Proper(M.addServer(sender))
+		
+		if M.hasGlobalIgnored(sender) > 0 then
+			CancelTrade()
+			if GlobalIgnoreDB.showDeclines == true then
+				M.ShowMsg (format(L["MSG_5"], sender))
+			end
+		end
+		
+		return
+	end
+
 	if gotLoaded == true and gotEntering == true then
 		if safeToLoad ~= true and gotUpdate ~= true then
 		
@@ -2722,6 +2735,7 @@ GILFRAME:RegisterEvent("PARTY_INVITE_REQUEST")
 GILFRAME:RegisterEvent("DUEL_REQUESTED")
 GILFRAME:RegisterEvent("GROUP_ROSTER_UPDATE")
 GILFRAME:RegisterEvent("GUILD_INVITE_REQUEST")
+GILFRAME:RegisterEvent("TRADE_REQUEST")
 
 SLASH_GIGNORE1		= "/gignore"
 SLASH_GIGNORE2		= "/gi"
