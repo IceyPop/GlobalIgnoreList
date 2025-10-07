@@ -1,5 +1,11 @@
 => VERSION HISTORY
 
+=> 11.2.5.0
+
+Updated for latest WoW patch
+
+Fixed issue introduced when merging classic and retail code that broke right click ignore in LFG menu
+
 => 11.2.0.7
 
 I didn't really fix the sync issue that I thought I did yesterday after having more time to test today, so hopefully its fixed now!
