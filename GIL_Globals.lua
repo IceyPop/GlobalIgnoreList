@@ -1,4 +1,3 @@
--- WORK IN PROGRESS: Move everything to its own namespace
 local addonName, addon = ...
 -- get a reference to localization entries
 local L = addon.L
@@ -450,7 +449,7 @@ V.wowIsCata			= false
 V.wowIsMOP			= false
 V.wowIsRetail		= false
 V.wowLongName		= "Unknown"
-V.wowName				= V.wowLongName
+V.wowName			= V.wowLongName
 
 -- Color yellow: ffff0000
 -- Color white: ffffff00

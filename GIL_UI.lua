@@ -1277,6 +1277,7 @@ local function CreateUIFrames()
 			GlobalIgnoreDB.filterCount[idx]		= 0
 			GlobalIgnoreDB.filterActive[idx]	= true
 			GlobalIgnoreDB.filterID[idx]		= ""
+			GlobalIgnoreDB.filterHistory[idx]	= {}
 			
 			M.FilterListDrawUpdate(FilterScrollFrame)
 		end)

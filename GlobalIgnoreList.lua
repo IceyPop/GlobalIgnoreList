@@ -6,10 +6,10 @@ local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.GIL_Loaded				= false
-V.GIL_SyncOK				= false
+V.GIL_Loaded			= false
+V.GIL_SyncOK			= false
 V.GIL_SyncTried			= false
-V.GIL_InSync				= false
+V.GIL_InSync			= false
 V.lastFilterError		= false
 
 local GILFRAME			= nil
@@ -191,7 +191,7 @@ function M.RemoveChatFilter (index)
 		table.remove(GlobalIgnoreDB.filterCount,	index)
 		table.remove(GlobalIgnoreDB.filterLogs,   index)
 		table.remove(GlobalIgnoreDB.filterActive,	index)
-		table.remove(GlobalIgnoreDB.filterID,		index)
+		table.remove(GlobalIgnoreDB.filterID,	    index)
 	end
 end
 
@@ -436,6 +436,7 @@ function M.ResetSpamFilters()
 		GlobalIgnoreDB.filterActive[count]	= filterDefActive[count]		
 		GlobalIgnoreDB.filterID[count]		= filterDefID[count]
 		GlobalIgnoreDB.filterCount[count]	= 0
+    GlobalIgnoreDB.filterLogs[count] = {}
 	end
 end
 
@@ -558,7 +559,7 @@ function M.SyncIgnoreList (silent)
 				
 				if (tmp ~= "") and (tmp ~= UNKNOWN) then
 					name = M.Proper(M.addServer(C_FriendList.GetIgnoreName(count)))
-
+					
 					if M.hasGlobalIgnored(name) == 0 then
 						added = added + 1
 						
@@ -623,7 +624,7 @@ function M.SyncIgnoreList (silent)
 				if GlobalIgnoreDB.trackChanges == true then
 			
 					local idx = hasDeleted(name)
-				
+					
 					if idx == 0 then
 						M.debugMsg ("New player "..name.. " found on character, adding to Global Ignore List")
 						skipRemove = true
@@ -999,6 +1000,14 @@ local function ApplicationStartup(self)
 		end
 	end
 
+	if GlobalIgnoreDB.filterLogs == nil then
+		GlobalIgnoreDB.filterLogs = {}
+		
+		for count = 1, #GlobalIgnoreDB.filterDesc do
+			GlobalIgnoreDB.filterLogs[count] = {}
+		end		
+	end
+	
 	loadedTime = GetTime()
 		
 	M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
@@ -1026,6 +1035,8 @@ local function ApplicationStartup(self)
 				GlobalIgnoreDB.filterActive[#GlobalIgnoreDB.filterActive + 1]	= filterDefActive[count]
 				GlobalIgnoreDB.filterCount[#GlobalIgnoreDB.filterCount + 1]		= 0
 				GlobalIgnoreDB.filterID[#GlobalIgnoreDB.filterID + 1]			= filterDefID[count]
+				GlobalIgnoreDB.filterLogs[#GlobalIgnoreDB.filterLogs + 1]	= {}
+				
 			elseif GlobalIgnoreDB.filterDesc[found] ~= filterDefDesc[count] or GlobalIgnoreDB.filterList[found] ~= filterDefFilter[count] then
 				M.ShowMsg (format(L["SYNC_5"], filterDefDesc[count]))
 				
@@ -1147,6 +1158,19 @@ local function EventHandler (self, event, sender, ...)
 			CancelDuel()
 			if GlobalIgnoreDB.showDeclines == true then
 				M.ShowMsg (format(L["MSG_3"], sender))
+			end
+		end
+		
+		return
+	end
+
+	if event == "TRADE_REQUEST" and V.GIL_Loaded == true then
+		sender = M.Proper(M.addServer(sender))
+		
+		if M.hasGlobalIgnored(sender) > 0 then
+			CancelTrade()
+			if GlobalIgnoreDB.showDeclines == true then
+				M.ShowMsg (format(L["MSG_5"], sender))
 			end
 		end
 		
@@ -1371,7 +1395,7 @@ function M.filterComplex (filterStr, chatStr, chNumber, chName)
 	local hasJournal	= find(chatStr, "|hjournal:", 1, true)
 	local hasMount		= find(chatStr, "|hmount:", 1, true)
 	local hasOutfit		= find(chatStr, "|houtfit:", 1, true)
-
+	
 	--print("After="..gsub(chatStr, "\124", "\124\124"))
 	
 	for word in gmatch(chatStr, "%S+") do
@@ -1974,15 +1998,15 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					return false
 				end
 					
-				message = string.lower(message)
+				newMsg = string.lower(message)
 				
 				if GlobalIgnoreDB.floodFilter > 0 and lastFilterMsgID ~= msgID then						
 					local text = ""
 
 					if GlobalIgnoreDB.floodFilter == 1 then
-						text = from .. message
+						text = from .. newMsg
 					else
-						text = message
+						text = msgMsg
 					end
 
 					if #gilFloodData > 0 then
@@ -2012,7 +2036,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				
 				lastFilterMsgID = msgID
 					
-				lastFilterResult, filterNum = M.filterComplex(nil, message, chNumber, chName)
+				lastFilterResult, filterNum = M.filterComplex(nil, newMsg, chNumber, chName)
 				
 				if lastFilterResult == true then
 						
@@ -2022,7 +2046,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 						GlobalIgnoreDB.filterTotal				= GlobalIgnoreDB.filterTotal + 1
 						GlobalIgnoreDB.filterCount[filterNum]	= GlobalIgnoreDB.filterCount[filterNum] + 1
 						AddToLog(filterNum, message, chNumber, chName, (from or UNKNOWN))
-
+							
 						M.GILUpdateChatCount()
 					end
 							
@@ -2257,6 +2281,19 @@ function SlashCmdList.GIGNORE (msg)
 	
 		for count = 1, #GlobalIgnoreDB.delList do
 			print(GlobalIgnoreDB.delList[count])
+		end
+		
+	elseif args[1] == "history" then
+	
+		local filterNum = tonumber(args[2])
+		
+		if (filterNum and filterNum > 0 and filterNum <= #GlobalIgnoreDB.filterLogs) then
+			print("Filter history for " .. GlobalIgnoreDB.filterDesc[filterNum])
+			
+			for i = 1, #GlobalIgnoreDB.filterLogs[filterNum] do
+				print ("Entry #" .. i)
+				print (GlobalIgnoreDB.filterLogs[filterNum][i].m)
+			end			
 		end
 		
 	elseif args[1] == "prune" then
@@ -2711,6 +2748,7 @@ GILFRAME:RegisterEvent("PARTY_INVITE_REQUEST")
 GILFRAME:RegisterEvent("DUEL_REQUESTED")
 GILFRAME:RegisterEvent("GROUP_ROSTER_UPDATE")
 GILFRAME:RegisterEvent("GUILD_INVITE_REQUEST")
+GILFRAME:RegisterEvent("TRADE_REQUEST")
 
 SLASH_GIGNORE1		= "/gignore"
 SLASH_GIGNORE2		= "/gi"
