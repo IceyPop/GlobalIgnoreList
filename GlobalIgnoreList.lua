@@ -2284,10 +2284,10 @@ function SlashCmdList.GIGNORE (msg)
 		end
 		
 	elseif args[1] == "history" then
-	
+
 		local filterNum = tonumber(args[2])
-		
-		if (filterNum and filterNum > 0 and filterNum <= #GlobalIgnoreDB.filterLogs) then
+
+		if (filterNum and filterNum > 0) and GlobalIgnoreDB.filterLogs[filterNum] then
 			print("Filter history for " .. GlobalIgnoreDB.filterDesc[filterNum])
 			
 			for i = 1, #GlobalIgnoreDB.filterLogs[filterNum] do
