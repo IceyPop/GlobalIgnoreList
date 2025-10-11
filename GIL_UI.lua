@@ -359,6 +359,21 @@ function M.LogScrollOnLeave (self)
 	end
 end
 
+function M.ShowFilterLog (filterNum)
+	if filterNum and GlobalIgnoreDB.filterActive[filterNum] then
+		if not (MainFrame and MainFrame:IsVisible()) then
+			M.GIL_GUI()
+		else
+			V.FilterLogTabButton:Click("LeftButton")
+			local filterDesc = GlobalIgnoreDB.filterDesc[filterNum]
+			LogScrollFilterNum = filterNum
+			M.LogListDrawUpdate(LogScrollFrame)
+			V.FilterLogMenu:SetDefaultText(filterDesc)
+			V.FilterLogMenu:SetText(filterDesc)
+		end
+	end
+end
+
 --------------------------
 -- CHAT FILTER SCROLLER --
 --------------------------
@@ -1147,6 +1162,7 @@ local function CreateUIFrames()
 			Tab3Frame:Show()
 			PanelTemplates_SetTab(MainFrame, 3)
 		end)
+	V.FilterLogTabButton = Tab3Button
 		
 	local Tab4Button = CreateFrame("Button", "GILTab4", MainFrame, C_EditMode and "CharacterFrameTabTemplate" or "CharacterFrameTabButtonTemplate")
 
@@ -1351,6 +1367,9 @@ local function CreateUIFrames()
 	Tab2FrameEdit.InfoText:SetWidth(250)
 	Tab2FrameEdit.InfoText:SetJustifyH("RIGHT")
 	Tab2FrameEdit.InfoText:SetPoint("TOPRIGHT", -48 , -24)
+	Tab2FrameEdit.InfoText:SetScript("OnMouseUp", function(self, button)
+		M.ShowFilterLog(FilterScrollSelect)
+	end)
 	
 	---
 
@@ -1432,12 +1451,22 @@ local function CreateUIFrames()
 	Button.EditBox:SetWidth(355)
 	Button.EditBox:SetFontObject("ChatFontNormal")
 	Button.EditBox:SetScript("OnTextChanged", function(self) GILFrame2EditTestResult:SetText("") end)
-	
+
+	Button = CreateFrame("Button", "GILFrame2EditTestLog", Tab2FrameEdit, "UIPanelButtonTemplate")
+	Button:SetSize(38, 18)
+	Button:SetNormalFontObject("GameFontNormalSmall")
+	Button:SetText("Logs")
+	Button:SetPoint("RIGHT", "GILFrame2EditTestText", "RIGHT", 254, 0)
+	Button:SetScript("OnClick",
+		function(self, button)
+			M.ShowFilterLog(FilterScrollSelect)
+		end)
+
 	Button = CreateFrame("Button", "GILFrame2EditTestHelp", Tab2FrameEdit, "UIPanelButtonTemplate")
 	Button:SetSize(38, 18)
 	Button:SetNormalFontObject("GameFontNormalSmall")
 	Button:SetText("Help")
-	Button:SetPoint("RIGHT", "GILFrame2EditTestText", "RIGHT", 294, 0)
+	Button:SetPoint("RIGHT", "GILFrame2EditTestLog", "RIGHT", 40, 0)
 	Button:SetScript("OnEnter",
 		function(self)
 		
@@ -1569,6 +1598,7 @@ local function CreateUIFrames()
 			filtered)
 		end
 	end)
+	V.FilterLogMenu = Drop
 
 	------------------
 	-- TAB 4 FRAMES --
