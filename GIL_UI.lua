@@ -22,6 +22,7 @@ local Tab2FrameBlock		= nil
 local Tab2EditDesc			= ""
 local Tab2EditFilter		= ""
 local Tab2EditActive		= false
+local Tab2BlockFilter		= nil
 local Tab3Frame				= nil
 local columnCount			= 0
 local IgnoreScrollFrame		= nil
@@ -395,6 +396,7 @@ function M.UpdateBlockButtons()
 	for count = 1, #BlockScrollPlayer do
 		BlockScrollPlayer[count]:SetText("")
 		BlockScrollText[count]:SetText("")		
+		BlockScrollText[count].tooltip = nil
 	end
 
 	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
@@ -404,14 +406,10 @@ function M.UpdateBlockButtons()
 		for count = total, 1, -1 do
 			idx = idx + 1
 			
-			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count]
-			local player	= "Unknown"
-			local comma		= string.find(text, ",")
-			
-			if comma then
-				player	= string.sub(text, 1, comma - 1)
-				text	= string.sub(text, comma + 1)
-			end
+			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].m
+			local player	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].s
+			local tstamp 	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].t
+			local channel = GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].n
 			
 			if not BlockScrollPlayer[idx] then
 				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
@@ -420,18 +418,11 @@ function M.UpdateBlockButtons()
 			BlockScrollPlayer[idx]:SetWidth(220)
 			BlockScrollPlayer[idx]:SetJustifyH("LEFT");
 			BlockScrollPlayer[idx]:SetText(player)
-			-- Apparently I can set MouseClickEnabled but I can't trap Onclick for a fontstring :(
-			-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
-			-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
-			-- Seems I have to redo this all as buttons now or else see what I can do with that mouse event.  Probably should
-			-- be buttons though.
-			--BlockScrollPlayer[idx]:SetMouseClickEnabled(true)
-			--BlockScrollPlayer[idx]:SetScript("OnClick",
-				--function(self)
-				--	print("Clicked received")
-				--end
-			--)
-
+			BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
+				if button == "RightButton" then
+					--print("r-clicked "..count)
+				end
+			end)
 
 			if not BlockScrollText[idx] then
 				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
@@ -442,6 +433,10 @@ function M.UpdateBlockButtons()
 			BlockScrollText[idx]:SetJustifyH("LEFT");
 			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
 			BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
+			BlockScrollText[idx].tooltip = {t=tstamp,c=channel}
+			BlockScrollText[idx]:SetScript("OnEnter", M.BlockScrollTextOnEnter)
+			BlockScrollText[idx]:SetScript("OnLeave", M.BlockScrollTextOnLeave)
+			BlockScrollText[idx]:SetScript("OnHide", M.BlockScrollTextOnLeave)
 			
 			local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
 
@@ -456,6 +451,23 @@ function M.UpdateBlockButtons()
 	end
 	
 	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize + 10);
+end
+
+
+function M.BlockScrollTextOnEnter (self)
+	if self.tooltip then
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddDoubleLine(L["COL_12"],L["TIP_3"])
+		GameTooltip:AddDoubleLine(self.tooltip.t, self.tooltip.c, 220/255, 220/255, 220/255, 153/255, 153/255, 102/255)
+		GameTooltip:Show()
+	end
+end
+
+
+function M.BlockScrollTextOnLeave (self)
+	if GameTooltip:GetOwner() == self then
+		GameTooltip_Hide()
+	end
 end
 
 
@@ -1351,7 +1363,7 @@ local function CreateUIFrames()
 			self.InfoText:SetText(format(L["INFO_3"], (GlobalIgnoreDB.filterCount[FilterScrollSelect] or 0)))
 		end
 	)
-	
+
 	-- BOTTOM BUTTONS
 	
 	local Button = CreateFrame("Button", "GILFrame2EditCancelButton", Tab2FrameEdit, "UIPanelButtonTemplate")
@@ -1395,7 +1407,10 @@ local function CreateUIFrames()
 	Tab2FrameEdit.InfoText:SetWidth(250)
 	Tab2FrameEdit.InfoText:SetJustifyH("RIGHT")
 	Tab2FrameEdit.InfoText:SetPoint("TOPRIGHT", -48 , -24)
-	
+	Tab2FrameEdit.InfoText:SetScript("OnMouseUp", function(self, button)
+		M.FilterScrollBlockHistory()
+	end)
+
 	---
 
 	Button = Tab2FrameEdit:CreateFontString("GILFrame2ActiveText", "OVERLAY", "GameFontHighlight")
@@ -1517,6 +1532,17 @@ local function CreateUIFrames()
 			else
 				GILFrame2EditTestResult:SetText("|cff00ff96PASSED")			
 			end
+		end)
+
+	Button = CreateFrame("Button", "GILFrame2EditBlockHistory", Tab2FrameEdit, "UIPanelButtonTemplate")
+	Button:SetSize(100, 18)
+	Button:SetNormalFontObject("GameFontNormalSmall")
+	Button:SetText(L["BUT_9"])
+	Button:SetPoint("BOTTOMLEFT", "GILFrame2EditTestField", "BOTTOMRIGHT", 15, -5)
+
+	Button:SetScript("OnClick",
+		function(self)
+			M.FilterScrollBlockHistory()
 		end)
 
 	---

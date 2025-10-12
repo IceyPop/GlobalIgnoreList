@@ -2289,13 +2289,23 @@ function SlashCmdList.GIGNORE (msg)
 	
 		local filterNum = tonumber(args[2])
 		
-		if (filterNum and filterNum > 0 and filterNum <= #GlobalIgnoreDB.filterHistory) then
+		if (filterNum and filterNum > 0 and GlobalIgnoreDB.filterHistory[filterNum]) then
 			print("Filter history for " .. GlobalIgnoreDB.filterDesc[filterNum])
 			
 			for i = 1, #GlobalIgnoreDB.filterHistory[filterNum] do
 				print ("Entry #" .. i)
-				print (GlobalIgnoreDB.filterHistory[filterNum][i])
+				print (GlobalIgnoreDB.filterHistory[filterNum][i].m)
 			end			
+		else
+			print("Usage: /gi history <filterID>")
+			if CountTable(GlobalIgnoreDB.filterHistory) > 0 then
+				print ("FilterIDs:")
+				for filterNum,_ in pairs(GlobalIgnoreDB.filterHistory) do
+					if GlobalIgnoreDB.filterActive[filterNum] then
+						print (format("  %2d %q",filterNum,GlobalIgnoreDB.filterDesc[filterNum]))
+					end
+				end
+			end
 		end
 		
 	elseif args[1] == "prune" then
