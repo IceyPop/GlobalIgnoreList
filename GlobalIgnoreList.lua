@@ -22,7 +22,7 @@ local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
 local maxHistorySize	= 250
-local maxFilterHistory	= 10
+local maxFilterHistory	= 20
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
@@ -753,8 +753,8 @@ local function ApplicationStartup(self)
 	filterDefActive[#filterDefActive + 1] = true
 	filterDefID[#filterDefID + 1]     = "GIL0002"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Mythic+ Sellers"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=WTS] or [word=selling]) and ([contains=m+] or [contains=boost] or [contains=carry] or [contains=mythic] or [contains=gold\\ only])"
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Mythic+/Raid Sellers"
+	filterDefFilter[#filterDefFilter + 1] = "([contains=WTS] or [contains=sell] or [contains=offer] or [contains=cheap] or [word=starting]) and ([contains=m+] or [contains=boost] or [contains=carry] or [contains=raid] or [contains=mythic] or [contains=keys] or [contains=gold\\ only] or [achievement] or [journal] or [contains=afk])"
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0003"
 
@@ -2031,10 +2031,13 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 						if #GlobalIgnoreDB.filterHistory[filterNum] >= maxFilterHistory then
 							table.remove(GlobalIgnoreDB.filterHistory[filterNum], 1)
 						end
+						
+						local t = M.addServer(from or "UNKNOWN")
 
-						GlobalIgnoreDB.filterHistory[filterNum][#GlobalIgnoreDB.filterHistory[filterNum] + 1] = message
+						GlobalIgnoreDB.filterHistory[filterNum][#GlobalIgnoreDB.filterHistory[filterNum] + 1] = t .. "," .. message
 
 						M.GILUpdateChatCount()
+						M.GILUpdateBlockHistory(filterNum)
 					end
 							
 					return lastFilterResult

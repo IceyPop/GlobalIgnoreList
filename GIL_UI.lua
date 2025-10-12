@@ -10,17 +10,19 @@ local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.needSorted					= true
-V.nameUI							= ""
+V.needSorted		= true
+V.nameUI			= ""
 
 local MainFrame				= nil
 local Tab1Frame				= nil
 local Tab2Frame				= nil
+local Tab2FrameState		= 0
 local Tab2FrameEdit			= nil
-local Tab2EditState			= false
+local Tab2FrameBlock		= nil
 local Tab2EditDesc			= ""
 local Tab2EditFilter		= ""
 local Tab2EditActive		= false
+local Tab2BlockFilter		= 0
 local Tab3Frame				= nil
 local columnCount			= 0
 local IgnoreScrollFrame		= nil
@@ -31,6 +33,8 @@ local IgnoreScrollSelect	= 0
 local FilterScrollFrame		= nil
 local FilterScrollButtons	= {}
 local FilterScrollSelect	= 0
+local BlockScrollPlayer		= {}
+local BlockScrollText		= {}
 local WINDOW_WIDTH			= 734
 local WINDOW_HEIGHT			= 400
 local WINDOW_OFFSET			= 113
@@ -45,7 +49,7 @@ local COL_EXPIRE			= 56
 local COL_NOTES				= 241
 local COL_DESC				= 210
 local COL_STATE				= 26
-local COL_FILTER			= 366
+local COL_FILTER			= 368
 local COL_BLOCKED			= 52
 local COL_INFOTEXT			= 400
 
@@ -197,7 +201,7 @@ StaticPopupDialogs["GIL_EXPIRE"] = {
 	end
 }
 
-StaticPopupDialogs["GIL_RESETFILTER"] = {
+StaticPopupDialogs["GIL_FILTERRESET"] = {
 
 	preferredIndex = STATICPOPUPS_NUMDIALOGS,
 	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_2"],
@@ -213,7 +217,7 @@ StaticPopupDialogs["GIL_RESETFILTER"] = {
 	end
 }
 
-StaticPopupDialogs["GIL_REMOVEFILTER"] = {
+StaticPopupDialogs["GIL_FILTERREMOVE"] = {
 
 	preferredIndex = STATICPOPUPS_NUMDIALOGS,
 	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_9"],
@@ -232,6 +236,15 @@ StaticPopupDialogs["GIL_REMOVEFILTER"] = {
 		self:GetParent():Hide()
 	end
 }
+
+local function ButtonFilterRemove()
+
+	if FilterScrollSelect <= 0 then
+		return
+	end
+	
+	StaticPopup_Show("GIL_FILTERREMOVE", L["BOX_10"])
+end
 
 local function ButtonIgnoreRemove()
 	
@@ -260,6 +273,28 @@ end
 --------------------------
 -- CHAT FILTER SCROLLER --
 --------------------------
+
+function M.FilterScrollChangeState (state)
+	-- -1 = Refresh currrent  0 = Base  1 = Edit  2 = Block
+	
+	if (state ~= -1) then
+		Tab2FrameState = state
+	end
+
+	if Tab2FrameState == 0 then
+		Tab2Frame:Show()
+		Tab2FrameBlock:Hide()
+		Tab2FrameEdit:Hide()
+	elseif Tab2FrameState == 1 then
+		Tab2Frame:Hide()
+		Tab2FrameEdit:Show()	
+		Tab2FrameBlock:Hide()
+	elseif Tab2FrameState == 2 then
+		Tab2Frame:Hide()
+		Tab2FrameEdit:Hide()	
+		Tab2FrameBlock:Show()
+	end
+end
 
 function M.FilterListDrawUpdate (self)
 
@@ -325,7 +360,7 @@ local function CreateFilterButtons()
 		end
 
 		FilterScrollButtons[count]:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
-		FilterScrollButtons[count]:RegisterForClicks("LeftButtonUp")
+		FilterScrollButtons[count]:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		FilterScrollButtons[count]:SetScript("OnClick", M.FilterScrollClick)
 
 		-- set name style
@@ -355,17 +390,96 @@ local function CreateFilterButtons()
 	M.FilterListDrawUpdate(FilterScrollFrame)
 end
 
-function M.FilterScrollDoubleClick()
-
-	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
+function M.UpdateBlockButtons()
+	local winSize = 0
 	
+	for count = 1, #BlockScrollPlayer do
+		BlockScrollPlayer[count]:SetText("")
+		BlockScrollText[count]:SetText("")		
+	end
+
+	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
+		local total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
+		local idx	= 0
+		
+		for count = total, 1, -1 do
+			idx = idx + 1
+			
+			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count]
+			local player	= "Unknown"
+			local comma		= string.find(text, ",")
+			
+			if comma then
+				player	= string.sub(text, 1, comma - 1)
+				text	= string.sub(text, comma + 1)
+			end
+			
+			if not BlockScrollPlayer[idx] then
+				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+			end
+			
+			BlockScrollPlayer[idx]:SetWidth(220)
+			BlockScrollPlayer[idx]:SetJustifyH("LEFT");
+			BlockScrollPlayer[idx]:SetText(player)
+			-- Apparently I can set MouseClickEnabled but I can't trap Onclick for a fontstring :(
+			-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
+			-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
+			-- Seems I have to redo this all as buttons now or else see what I can do with that mouse event.  Probably should
+			-- be buttons though.
+			--BlockScrollPlayer[idx]:SetMouseClickEnabled(true)
+			--BlockScrollPlayer[idx]:SetScript("OnClick",
+				--function(self)
+				--	print("Clicked received")
+				--end
+			--)
+
+
+			if not BlockScrollText[idx] then
+				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+			end
+			
+			BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
+			BlockScrollText[idx]:SetWidth(462)
+			BlockScrollText[idx]:SetJustifyH("LEFT");
+			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
+			BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
+			
+			local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
+
+			winSize = winSize + oneSize + 10
+
+			if idx == 1 then
+				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
+			else
+				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -220, -10)
+			end			
+		end
+	end
+	
+	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize + 10);
+end
+
+
+function M.FilterScrollBlockHistory()
+	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
+		Tab2BlockFilter = FilterScrollSelect
+		M.FilterScrollChangeState(2)
+	else
+		if GlobalIgnoreDB.filterDesc[1] ~= nil then
+			Tab2BlockFilter = 1
+			M.FilterScrollChangeState(2)
+		end
+	end
+end
+
+function M.FilterScrollEditMenu()
+	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
+
 		Tab2EditDesc   = GlobalIgnoreDB.filterDesc[FilterScrollSelect]
 		Tab2EditFilter = GlobalIgnoreDB.filterList[FilterScrollSelect]
 		Tab2EditActive = GlobalIgnoreDB.filterActive[FilterScrollSelect]
-		Tab2EditState  = true
-
-		Tab2Frame:Hide()
-		Tab2FrameEdit:Show()	
+		
+		M.FilterScrollChangeState(1)
 	end
 end
 
@@ -374,14 +488,49 @@ function M.FilterScrollClick(self, button, down)
 	if down == true then return end
 	
 	if FilterScrollSelect == self:GetID() and button == "LeftButton" then
-		M.FilterScrollDoubleClick()
+		M.FilterScrollEditMenu()
 		return
 	elseif FilterScrollSelect ~= self:GetID() then
 		FilterScrollSelect = self:GetID()
 		M.FilterListDrawUpdate(FilterScrollFrame)
 	end
+	
+	if button == "RightButton" then	
+		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+			root:CreateTitle(L["RCM_10"])
+			root:CreateDivider()
+			root:CreateButton(L["RCM_11"],
+				function()
+					M.FilterScrollEditMenu()
+				end)
+			root:CreateButton(L["RCM_12"],
+				function()
+					ButtonFilterRemove()
+				end)
+			root:CreateDivider()				
+			root:CreateButton(L["RCM_13"] .. " (" .. #GlobalIgnoreDB.filterHistory[FilterScrollSelect] .. ")",
+				function()
+					M.FilterScrollBlockHistory()
+				end)			
+			root:CreateDivider()	
+			root:CreateButton(L["RCM_14"],
+				function()
+					GlobalIgnoreDB.filterCount[FilterScrollSelect] = 0
+					M.GILUpdateChatCount()
+				end)
+			root:CreateButton(L["RCM_15"],
+				function()
+					GlobalIgnoreDB.filterHistory[FilterScrollSelect] = {}
+				end)
+				
+			root:CreateDivider()			
+			root:CreateButton(L["RCM_5"],
+				function()					
+				end)			
+		end)
+	end
+	
 end
-
 
 --------------------------
 -- IGNORE LIST SCROLLER --
@@ -1002,6 +1151,7 @@ local function CreateUIFrames()
 			Tab3Frame:Hide()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
+			Tab2FrameBlock:Hide()
 			Tab1Frame:Show()
 			PanelTemplates_SetTab(MainFrame, 1)
 		end)
@@ -1017,13 +1167,7 @@ local function CreateUIFrames()
 			Tab1Frame:Hide()
 			Tab3Frame:Hide()
 			
-			if Tab2EditState == true then
-				Tab2FrameEdit:Show()
-				Tab2Frame:Hide()
-			else
-				Tab2FrameEdit:Hide()
-				Tab2Frame:Show()
-			end
+			M.FilterScrollChangeState(-1)
 					
 			PanelTemplates_SetTab(MainFrame, 2)
 		end)
@@ -1039,6 +1183,7 @@ local function CreateUIFrames()
 			Tab1Frame:Hide()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
+			Tab2FrameBlock:Hide()
 			Tab3Frame:Show()
 			PanelTemplates_SetTab(MainFrame, 3)
 		end)
@@ -1142,11 +1287,9 @@ local function CreateUIFrames()
 	
 	CreateFilterButtons()
 
-	-- create
 	local Button = CreateFrame("Button", "GILFrame2CreateButton", Tab2Frame, "UIPanelButtonTemplate")
 	Button:SetSize(110, 22)
 	Button:SetText(L["BUT_5"])
-	--Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)
 	Button:SetPoint("BOTTOMRIGHT", -1, -24)
 	Button:SetScript("OnClick",
 		function(self)
@@ -1155,7 +1298,7 @@ local function CreateUIFrames()
 			GlobalIgnoreDB.filterList[idx]		= "[word=NewChatFilter]"
 			GlobalIgnoreDB.filterDesc[idx]		= "New Chat Filter"
 			GlobalIgnoreDB.filterCount[idx]		= 0
-			GlobalIgnoreDB.filterActive[idx]	= true
+			GlobalIgnoreDB.filterActive[idx]	= false
 			GlobalIgnoreDB.filterID[idx]		= ""
 			GlobalIgnoreDB.filterHistory[idx]	= {}
 			
@@ -1166,15 +1309,32 @@ local function CreateUIFrames()
 	Button:SetSize(110, 22)
 	Button:SetText(L["BUT_6"])
 	Button:SetPoint("RIGHT", "GILFrame2CreateButton", "LEFT", 0, 0)	
-	Button:SetScript("OnClick", function(self) if FilterScrollSelect <= 0 then return end StaticPopup_Show("GIL_REMOVEFILTER", L["BOX_10"]) end)
+	Button:SetScript("OnClick",
+		function(self)
+			ButtonFilterRemove()
+		end
+	)
+
+	local Button = CreateFrame("Button", "GILFrame2BlockButton", Tab2Frame, "UIPanelButtonTemplate")	
+	Button:SetSize(110, 22)
+	Button:SetText(L["BUT_9"])
+	Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)	
+	Button:SetScript("OnClick",
+		function(self)
+			M.FilterScrollBlockHistory()
+		end
+	)
 	
-	-- reset
-	Button = CreateFrame("Button", "GILFrame2ResetButton", Tab2Frame, "UIPanelButtonTemplate")
+	local Button = CreateFrame("Button", "GILFrame2ResetButton", Tab2Frame, "UIPanelButtonTemplate")
 	Button:SetSize(110, 22)
 	Button:SetText(L["BUT_7"])
-	Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)
-	Button:SetScript("OnClick", function(self) StaticPopup_Show("GIL_RESETFILTER", L["BOX_4"]) end)
-	--]]
+	--Button:SetPoint("RIGHT", "GILFrame2BlockButton", "LEFT", 0, 0)
+	Button:SetPoint("BOTTOMLEFT", -1, -24)	
+	Button:SetScript("OnClick",
+		function(self)
+			StaticPopup_Show("GIL_FILTERRESET", L["BOX_4"])
+		end
+	)
 
 	-----------------------
 	-- TAB 2 EDIT FRAMES --
@@ -1187,8 +1347,11 @@ local function CreateUIFrames()
 	Tab2FrameEdit:SetWidth(WINDOW_WIDTH - 19)
 	Tab2FrameEdit:SetHeight(WINDOW_HEIGHT - WINDOW_OFFSET + 20)
 	Tab2FrameEdit:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -64)
-
-	Tab2FrameEdit:SetScript("OnShow", function(self) self.InfoText:SetText(format(L["INFO_3"], (GlobalIgnoreDB.filterCount[FilterScrollSelect] or 0))) end)
+	Tab2FrameEdit:SetScript("OnShow",
+		function(self)
+			self.InfoText:SetText(format(L["INFO_3"], (GlobalIgnoreDB.filterCount[FilterScrollSelect] or 0)))
+		end
+	)
 	
 	-- BOTTOM BUTTONS
 	
@@ -1197,7 +1360,11 @@ local function CreateUIFrames()
 	Button:SetSize(110, 22)
 	Button:SetText("Cancel")
 	Button:SetPoint("BOTTOMRIGHT", -1, -24)
-	Button:SetScript("OnClick", function(self) Tab2EditState = false Tab2FrameEdit:Hide() Tab2Frame:Show() end)
+	Button:SetScript("OnClick",
+		function(self)
+			M.FilterScrollChangeState(0)
+		end
+	)
 	
 	Button = CreateFrame("Button", "GILFrame2EditSaveButton", Tab2FrameEdit, "UIPanelButtonTemplate")
 	Button:SetSize(110, 22)
@@ -1212,11 +1379,9 @@ local function CreateUIFrames()
 			GlobalIgnoreDB.filterList[FilterScrollSelect] = Tab2EditFilter
 			GlobalIgnoreDB.filterActive[FilterScrollSelect] = Tab2EditActive
 			
-			Tab2EditState = false
-			
-			Tab2FrameEdit:Hide()
-			Tab2Frame:Show()
-		end)
+			M.FilterScrollChangeState(0)
+		end
+	)
 	
 	
 	-- WIDGETS
@@ -1332,7 +1497,6 @@ local function CreateUIFrames()
 			GameTooltip:Hide()
 		end)
 	
-
 	Button = CreateFrame("Button", "GILFrame2EditTestTest", Tab2FrameEdit, "UIPanelButtonTemplate")
 	Button:SetSize(38, 18)
 	Button:SetNormalFontObject("GameFontNormalSmall")
@@ -1392,6 +1556,80 @@ local function CreateUIFrames()
 			self:HighlightText()
 		end)
 
+	--------------------------------
+	-- TAB 2 BLOCK HISTORY FRAMES --
+	--------------------------------
+
+	Tab2FrameBlock = CreateFrame("Frame", "GILFrame2Block", MainFrame, "InsetFrameTemplate")
+	
+	Tab2FrameBlock:Hide()
+
+	Tab2FrameBlock:SetWidth(WINDOW_WIDTH - 19)
+	Tab2FrameBlock:SetHeight(WINDOW_HEIGHT - WINDOW_OFFSET)
+	Tab2FrameBlock:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -84)
+	
+	Tab2FrameBlock.InfoText = Tab2FrameBlock:CreateFontString("FontString", "OVERLAY", "GameFontHighlight")
+	
+	Tab2FrameBlock.InfoText:SetWidth(COL_INFOTEXT)
+	Tab2FrameBlock.InfoText:SetJustifyH("CENTER")
+	Tab2FrameBlock.InfoText:SetPoint("TOP", 0, 46)
+	
+	Tab2FrameBlock:SetScript("OnShow",
+		function(self)
+			self.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. #GlobalIgnoreDB.filterHistory[Tab2BlockFilter] .. ")")
+			M.UpdateBlockButtons()
+		end
+	)
+
+	createColumn("Player", 220, Tab2FrameBlock)
+	createColumn("Message", 470, Tab2FrameBlock)
+	
+	-- BOTTOM BUTTONS
+	
+	local Button = CreateFrame("Button", "GILFrame2BlockCloseButton", Tab2FrameBlock, "UIPanelButtonTemplate")
+	Button:SetSize(110, 22)
+	Button:SetText(L["BUT_10"])
+	Button:SetPoint("BOTTOMRIGHT", -1, -24)
+	Button:SetScript("OnClick", function(self)
+		M.FilterScrollChangeState(0)
+	end)
+	
+	local Button = CreateFrame("Button", "GILFrame2BlockEdit", Tab2FrameBlock, "UIPanelButtonTemplate")
+	Button:SetSize(110, 22)
+	Button:SetText(L["BUT_11"])
+	Button:SetPoint("RIGHT", "GILFrame2BlockCloseButton", "LEFT", 0, 0)
+	Button:SetScript("OnClick",
+		function(self)
+			FilterScrollSelect = Tab2BlockFilter
+			M.FilterScrollEditMenu()
+		end
+	)
+	
+	-- SCROLLING SLATE
+	
+	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockSlate", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
+	Tab2FrameBlock.Slate = CreateFrame("Frame");
+	
+	local name					= Tab2FrameBlock.ScrollFrame:GetName();
+	Tab2FrameBlock.ScrollBar	= _G[name.."ScrollBar"];
+	Tab2FrameBlock.ScrollUp		= _G[name.."ScrollBarScrollUpButton"];
+	Tab2FrameBlock.ScrollDown	= _G[name.."ScrollBarScrollDownButton"];
+ 
+	Tab2FrameBlock.ScrollUp:ClearAllPoints();
+	Tab2FrameBlock.ScrollUp:SetPoint("TOPRIGHT", Tab2FrameBlock.ScrollFrame, "TOPRIGHT", -2, -2);
+ 
+	Tab2FrameBlock.ScrollDown:ClearAllPoints();
+	Tab2FrameBlock.ScrollDown:SetPoint("BOTTOMRIGHT", Tab2FrameBlock.ScrollFrame, "BOTTOMRIGHT", -2, 2);
+ 
+	Tab2FrameBlock.ScrollBar:ClearAllPoints();
+	Tab2FrameBlock.ScrollBar:SetPoint("TOP", Tab2FrameBlock.ScrollUp, "BOTTOM", 0, -2);
+	Tab2FrameBlock.ScrollBar:SetPoint("BOTTOM", Tab2FrameBlock.ScrollDown, "TOP", 0, 2);
+ 
+	Tab2FrameBlock.ScrollFrame:SetScrollChild(Tab2FrameBlock.Slate);	
+	Tab2FrameBlock.ScrollFrame:SetAllPoints(Tab2FrameBlock);
+	
+	M.UpdateBlockButtons()
+		
 	------------------
 	-- TAB 3 FRAMES --
 	------------------	
@@ -1484,11 +1722,18 @@ local function CreateUIFrames()
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.showWarning == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showWarning = (self:GetChecked() or false) end) 
+	
+	Button = CreateFrame("CheckButton", "GILFrame3IgnoreResponse", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button:SetPoint("TOPLEFT", GILFrame3SyncWarning, "BOTTOMLEFT", 0, 4)
+	_G[Button:GetName().."Text"]:SetText(L["OPT_24"])
+	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
+	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.ignoreResponse == true) end)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.ignoreResponse = (self:GetChecked() or false) end) 	
 
 	Button = Tab3Frame.Slate:CreateFontString("GILFrame3ExpText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3SyncWarning, "BOTTOMLEFT", 6, -4)
+	Button:SetPoint("TOPLEFT", GILFrame3IgnoreResponse, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_5"])
-
+	
 	Button = CreateFrame("EditBox", "GILFrame3Exp", Tab3Frame.Slate, "InputBoxTemplate")
 	Button:SetPoint("TOPLEFT", GILFrame3ExpText, "TOPRIGHT", 6, 4)
 	Button:SetWidth(50)
@@ -1610,18 +1855,11 @@ local function CreateUIFrames()
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.useLFGHacks == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useLFGHacks = (self:GetChecked() or false) end) 
-	
-	Button = CreateFrame("CheckButton", "GILFrame3IgnoreResponse", Tab3Frame.Slate, "UICheckButtonTemplate")	
-	Button:SetPoint("TOPLEFT", GILFrame3HackLFG, "BOTTOMLEFT", 0, 4)
-	_G[Button:GetName().."Text"]:SetText(L["OPT_24"])
-	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
-	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.ignoreResponse == true) end)
-	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.ignoreResponse = (self:GetChecked() or false) end) 
-	
+		
 	-- Strata dropdown
 	
 	Button = Tab3Frame.Slate:CreateFontString("GILFrame3StrataText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3IgnoreResponse, "BOTTOMLEFT", 6, -4)
+	Button:SetPoint("TOPLEFT", GILFrame3HackLFG, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_25"])
 	
 	local Drop = CreateFrame("DropdownButton", "GILFrame3StrataMenu", Tab3Frame.Slate, "WowStyle1DropdownTemplate")
@@ -1712,6 +1950,12 @@ end
 ---------------------
 -- CORE UI GLOBALS --
 ---------------------
+
+function M.GILUpdateBlockHistory(filterNumber)
+	if MainFrame ~= nil and Tab2FrameBlock:IsVisible() and Tab2BlockFilter == filterNumber then
+		M.UpdateBlockButtons()
+	end
+end
 
 function M.GILUpdateChatCount(filterNumber)
 	if MainFrame ~= nil and Tab2Frame:IsVisible() then	
