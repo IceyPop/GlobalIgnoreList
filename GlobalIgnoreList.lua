@@ -22,7 +22,7 @@ local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
 local maxHistorySize	= 250
-local maxLogSize      = 50
+local maxFilterHistory	= 50
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
@@ -167,31 +167,31 @@ local function RemoveFromList(index)
 end
 	
 
-local function AddToLog(filterNum, message, chNumber, chName, from)
-	local logs = GlobalIgnoreDB.filterLogs or {}
-	GlobalIgnoreDB.filterLogs = logs
-	logs[filterNum] = logs[filterNum] or {}
-	local filterLog = logs[filterNum]
-  local over = #filterLog - maxLogSize+1
+local function AddToBlockHistory(filterNum, message, chNumber, chName, from)
+	local history = GlobalIgnoreDB.filterHistory or {}
+	GlobalIgnoreDB.filterHistory = history
+	history[filterNum] = history[filterNum] or {}
+	local numHistory = history[filterNum]
+  local over = #numHistory - maxFilterHistory+1
   if over > 0 and not InCombatLockdown() then
     for i=1,over do
-      table.remove(filterLog,1)
+      table.remove(numHistory,1)
     end
   end
   local timestamp = date("%Y.%m.%d %H:%M:%S",GetServerTime()) -- YYYY.MM.DD HH:MM:SS
-  table.insert(filterLog,{m=message,c=chNumber,n=chName,i=filterNum,s=from,t=timestamp})
-  M.LogListDrawUpdate(nil,filterNum)
+  table.insert(numHistory,{m=message,c=chNumber,n=chName,i=filterNum,s=from,t=timestamp})
+	M.GILUpdateBlockHistory(filterNum)
 end
 
-
+	
 function M.RemoveChatFilter (index)
 	if index <= #GlobalIgnoreDB.filterList then
 		table.remove(GlobalIgnoreDB.filterList,		index)
 		table.remove(GlobalIgnoreDB.filterDesc,		index)
 		table.remove(GlobalIgnoreDB.filterCount,	index)
-		table.remove(GlobalIgnoreDB.filterLogs,   index)
 		table.remove(GlobalIgnoreDB.filterActive,	index)
-		table.remove(GlobalIgnoreDB.filterID,	    index)
+		table.remove(GlobalIgnoreDB.filterID,		index)
+		table.remove(GlobalIgnoreDB.filterHistory,	index)
 	end
 end
 
@@ -419,12 +419,12 @@ local function ShowIgnoreList (param)
 end
 
 function M.ResetSpamFilters()
-	GlobalIgnoreDB.filterList   = {}
-	GlobalIgnoreDB.filterDesc   = {}
-	GlobalIgnoreDB.filterCount  = {}
-	GlobalIgnoreDB.filterLogs   = {}
-	GlobalIgnoreDB.filterActive = {}
-	GlobalIgnoreDB.filterID		= {}
+	GlobalIgnoreDB.filterList		= {}
+	GlobalIgnoreDB.filterDesc		= {}
+	GlobalIgnoreDB.filterCount		= {}
+	GlobalIgnoreDB.filterActive		= {}
+	GlobalIgnoreDB.filterID			= {}
+	GlobalIgnoreDB.filterHistory	= {}
 	
 	GlobalIgnoreDB.invertSpam = false
 	GlobalIgnoreDB.spamFilter = true
@@ -436,7 +436,7 @@ function M.ResetSpamFilters()
 		GlobalIgnoreDB.filterActive[count]	= filterDefActive[count]		
 		GlobalIgnoreDB.filterID[count]		= filterDefID[count]
 		GlobalIgnoreDB.filterCount[count]	= 0
-    GlobalIgnoreDB.filterLogs[count] = {}
+		GlobalIgnoreDB.filterHistory[count]	= {}
 	end
 end
 
@@ -472,10 +472,10 @@ local function ResetIgnoreDB()
 		syncInfo		= {},
 		filterTotal		= 0,
 		filterCount		= {},
-		filterLogs    = {},
 		filterDesc		= {},
 		filterList		= {},
 		filterID		= {},
+		filterHistory	= {},
 		skipGuild		= true,
 		skipParty		= false,
 		skipPrivate		= true,
@@ -771,8 +771,8 @@ local function ApplicationStartup(self)
 	filterDefActive[#filterDefActive + 1] = true
 	filterDefID[#filterDefID + 1]     = "GIL0002"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Mythic+ Sellers"
-	filterDefFilter[#filterDefFilter + 1] = "([contains=WTS] or [word=selling]) and ([contains=m+] or [contains=boost] or [contains=carry] or [contains=mythic] or [contains=gold\\ only])"
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Mythic+/Raid Sellers"
+	filterDefFilter[#filterDefFilter + 1] = "([contains=WTS] or [contains=sell] or [contains=offer] or [contains=cheap] or [word=starting]) and ([contains=m+] or [contains=boost] or [contains=carry] or [contains=raid] or [contains=mythic] or [contains=keys] or [contains=gold\\ only] or [achievement] or [journal] or [contains=afk])"
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0003"
 
@@ -1000,11 +1000,11 @@ local function ApplicationStartup(self)
 		end
 	end
 
-	if GlobalIgnoreDB.filterLogs == nil then
-		GlobalIgnoreDB.filterLogs = {}
+	if GlobalIgnoreDB.filterHistory == nil then
+		GlobalIgnoreDB.filterHistory = {}
 		
 		for count = 1, #GlobalIgnoreDB.filterDesc do
-			GlobalIgnoreDB.filterLogs[count] = {}
+			GlobalIgnoreDB.filterHistory[count] = {}
 		end		
 	end
 	
@@ -1035,7 +1035,7 @@ local function ApplicationStartup(self)
 				GlobalIgnoreDB.filterActive[#GlobalIgnoreDB.filterActive + 1]	= filterDefActive[count]
 				GlobalIgnoreDB.filterCount[#GlobalIgnoreDB.filterCount + 1]		= 0
 				GlobalIgnoreDB.filterID[#GlobalIgnoreDB.filterID + 1]			= filterDefID[count]
-				GlobalIgnoreDB.filterLogs[#GlobalIgnoreDB.filterLogs + 1]	= {}
+				GlobalIgnoreDB.filterHistory[#GlobalIgnoreDB.filterHistory + 1]	= {}
 				
 			elseif GlobalIgnoreDB.filterDesc[found] ~= filterDefDesc[count] or GlobalIgnoreDB.filterList[found] ~= filterDefFilter[count] then
 				M.ShowMsg (format(L["SYNC_5"], filterDefDesc[count]))
@@ -1997,7 +1997,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 				if GlobalIgnoreDB.skipYourself == true and from == V.playerName then
 					return false
 				end
-					
+													
 				newMsg = string.lower(message)
 				
 				if GlobalIgnoreDB.floodFilter > 0 and lastFilterMsgID ~= msgID then						
@@ -2045,8 +2045,10 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					else
 						GlobalIgnoreDB.filterTotal				= GlobalIgnoreDB.filterTotal + 1
 						GlobalIgnoreDB.filterCount[filterNum]	= GlobalIgnoreDB.filterCount[filterNum] + 1
-						AddToLog(filterNum, message, chNumber, chName, (from or UNKNOWN))
-							
+
+						local t = M.addServer(from or _G.UNKNOWN)
+						AddToBlockHistory(filterNum, message, chNumber, chName, t)
+
 						M.GILUpdateChatCount()
 					end
 							
@@ -2284,15 +2286,15 @@ function SlashCmdList.GIGNORE (msg)
 		end
 		
 	elseif args[1] == "history" then
-
+	
 		local filterNum = tonumber(args[2])
-
-		if (filterNum and filterNum > 0) and GlobalIgnoreDB.filterLogs[filterNum] then
+		
+		if (filterNum and filterNum > 0 and filterNum <= #GlobalIgnoreDB.filterHistory) then
 			print("Filter history for " .. GlobalIgnoreDB.filterDesc[filterNum])
 			
-			for i = 1, #GlobalIgnoreDB.filterLogs[filterNum] do
+			for i = 1, #GlobalIgnoreDB.filterHistory[filterNum] do
 				print ("Entry #" .. i)
-				print (GlobalIgnoreDB.filterLogs[filterNum][i].m)
+				print (GlobalIgnoreDB.filterHistory[filterNum][i])
 			end			
 		end
 		
