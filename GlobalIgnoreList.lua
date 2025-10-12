@@ -1998,7 +1998,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					return false
 				end
 													
-				newMsg = string.lower(message)
+				local newMsg = string.lower(message)
 				
 				if GlobalIgnoreDB.floodFilter > 0 and lastFilterMsgID ~= msgID then						
 					local text = ""
@@ -2006,7 +2006,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					if GlobalIgnoreDB.floodFilter == 1 then
 						text = from .. newMsg
 					else
-						text = msgMsg
+						text = newMsg
 					end
 
 					if #gilFloodData > 0 then
