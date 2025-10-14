@@ -22,7 +22,7 @@ local Tab2FrameBlock		= nil
 local Tab2EditDesc			= ""
 local Tab2EditFilter		= ""
 local Tab2EditActive		= false
-local Tab2BlockFilter		= nil
+local Tab2BlockFilter		= 0
 local Tab3Frame				= nil
 local columnCount			= 0
 local IgnoreScrollFrame		= nil
@@ -390,22 +390,35 @@ local function CreateFilterButtons()
 	M.FilterListDrawUpdate(FilterScrollFrame)
 end
 
+local function RemoveBlockEntriesByPlayer(filterNum, name)
+	if GlobalIgnoreDB.filterHistory[filterNum] then
+		for index = #GlobalIgnoreDB.filterHistory[filterNum], 1, -1 do
+			if GlobalIgnoreDB.filterHistory[filterNum][index].s == name then
+				table.remove(GlobalIgnoreDB.filterHistory[filterNum], index)
+			end
+		end
+	end
+	M.GILUpdateBlockHistory(filterNum)
+end
+
 function M.UpdateBlockButtons()
-	local winSize = 0
+	local winSize, total = 0, 0
 
 	for count = 1, #BlockScrollPlayer do
 		BlockScrollPlayer[count]:SetText("")
 		BlockScrollText[count]:SetText("")		
 		BlockScrollText[count].tooltip = nil
+		BlockScrollPlayer[count]:Hide()
+		BlockScrollText[count]:Hide()
 	end
 
 	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
-		local total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
+		total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
 		local idx	= 0
 		
 		for count = total, 1, -1 do
 			idx = idx + 1
-			
+			-- fields: m=message, s=source, t=timestamp, c=channelnum, n=channelname, i=filternum
 			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].m
 			local player	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].s
 			local tstamp 	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].t
@@ -414,20 +427,22 @@ function M.UpdateBlockButtons()
 			if not BlockScrollPlayer[idx] then
 				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
 			end
-			
+			BlockScrollPlayer[idx]:Show()
 			BlockScrollPlayer[idx]:SetWidth(220)
 			BlockScrollPlayer[idx]:SetJustifyH("LEFT");
 			BlockScrollPlayer[idx]:SetText(player)
 			BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
 				if button == "RightButton" then
-					--print("r-clicked "..count)
+					-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
+					-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
+					M.BlockScrollPlayerClick(self, button, count)
 				end
 			end)
 
 			if not BlockScrollText[idx] then
 				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
 			end
-			
+			BlockScrollText[idx]:Show()
 			BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
 			BlockScrollText[idx]:SetWidth(462)
 			BlockScrollText[idx]:SetJustifyH("LEFT");
@@ -449,7 +464,9 @@ function M.UpdateBlockButtons()
 			end			
 		end
 	end
-	
+	if Tab2BlockFilter and Tab2BlockFilter > 0 then
+		Tab2FrameBlock.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. total .. ")")
+	end
 	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize + 10);
 end
 
@@ -470,6 +487,56 @@ function M.BlockScrollTextOnLeave (self)
 	end
 end
 
+function M.BlockScrollPlayerClick(self, button, entry)
+	local name = self:GetText()
+	name = M.Proper(M.addServer(name))
+	if not (name and #name>=2) then return end
+	local index = M.hasGlobalIgnored(name)
+	local isIgnored = index and index > 0
+	MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+		root:CreateTitle(name)
+		root:CreateDivider()
+		if isIgnored then
+			root:CreateButton(L["RCM_4"],
+				function()
+					C_FriendList.DelIgnore(name)
+				end)
+		else
+			root:CreateButton(L["RCM_6"],
+				function()
+					C_FriendList.AddOrDelIgnore(name)
+				end)
+		end
+		root:CreateDivider()
+		root:CreateButton("Remove Entry", -- TODO: localization
+			function()
+				if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] and GlobalIgnoreDB.filterHistory[Tab2BlockFilter][entry] then
+					table.remove(GlobalIgnoreDB.filterHistory[Tab2BlockFilter],entry)
+					M.GILUpdateBlockHistory(Tab2BlockFilter)
+				end
+			end)
+		root:CreateButton("Remove All Entries by Player", -- TODO localization
+			function()
+				RemoveBlockEntriesByPlayer(Tab2BlockFilter, name)
+			end)
+		root:CreateDivider()
+		root:CreateButton(L["RCM_15"],
+			function()
+				GlobalIgnoreDB.filterHistory[Tab2BlockFilter] = {}
+				M.GILUpdateBlockHistory(Tab2BlockFilter)
+			end)
+		root:CreateDivider()
+		root:CreateButton(L["RCM_11"],
+			function()
+				FilterScrollSelect = Tab2BlockFilter
+				M.FilterScrollEditMenu()
+			end)
+		root:CreateDivider()
+		root:CreateButton(L["RCM_5"],
+			function()
+			end)
+	end)
+end
 
 function M.FilterScrollBlockHistory()
 	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
@@ -1601,7 +1668,6 @@ local function CreateUIFrames()
 	
 	Tab2FrameBlock:SetScript("OnShow",
 		function(self)
-			self.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. #GlobalIgnoreDB.filterHistory[Tab2BlockFilter] .. ")")
 			M.UpdateBlockButtons()
 		end
 	)
