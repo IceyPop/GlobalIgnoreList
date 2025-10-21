@@ -22,7 +22,7 @@ local faction			  = nil
 local maxIgnoreSize		= 50
 local maxSyncTries		= 3
 local maxHistorySize	= 250
-local maxFilterHistory	= 20
+local maxFilterHistory	= 25
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
@@ -1833,24 +1833,25 @@ end
 
 local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5, chNumber, chName, t8, msgID, t10, t11, t12, ...)
 	
---	print("DEBUG"..
---		"\n\tFrom: "..(from or "nil")..
---		"\n\tEvent: "..(event or "nil")..
---		"\n\tChannel Number: "..chNumber..
---		"\n\tChannel Name: "..chName..
---		"\n\tMsg ID: "..msgID..
---		"\n\tMsg: "..message..
---		"\n\tT1:"..(t1 or "nil")..
---		"\n\tT2:"..(t2 or "nil")..
---		"\n\tT3:"..(t3 or "nil")..
---		"\n\tT4:"..(t4 or "nil")..
---		"\n\tT5:"..(t5 or "nil")..
---		"\n\tT8:"..(t8 or "nil")..
---		"\n\tT10:"..(t10 or "nil")..
---		"\n\tT11:"..(t11 or "nil")..
---		"\n\tT12:"..(t12 or "nil")..
---		"\nEND"
---	)
+	--print("DEBUG"..
+	--	"\n\tFrom: "..(from or "nil")..
+	--	"\n\tEvent: "..(event or "nil")..
+	--	"\n\tChannel Number: "..chNumber..
+	--	"\n\tChannel Name: "..chName..
+	--	"\n\tMsg ID: "..msgID..
+	--	"\n\tMsg: "..message..
+	--	"\n\tT1:"..(t1 or "nil")..
+	--	"\n\tT2:"..(t2 or "nil")..
+	--	"\n\tT3:"..(t3 or "nil")..
+	--	"\n\tT4:"..(t4 or "nil")..
+	--	"\n\tT5:"..(t5 or "nil")..
+	--	"\n\tT6:"..(t6 or "nil")..
+	--	"\n\tT8:"..(t8 or "nil")..
+	--	"\n\tT10:"..(t10 or "nil")..
+	--	"\n\tT11:"..(t11 or "nil")..
+	--	"\n\tT12:"..(t12 or "nil")..
+	--	"\nEND"
+	--)
 	
 	--if lastMsg ~= message then	
 	--	t = string.gsub(message, "|", "!")
@@ -1980,7 +1981,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 					return false
 				end
 													
-				newMsg = string.lower(message)
+				local newMsg = string.lower(message)
 				
 				if GlobalIgnoreDB.floodFilter > 0 and lastFilterMsgID ~= msgID then						
 					local text = ""
@@ -2032,9 +2033,10 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 							table.remove(GlobalIgnoreDB.filterHistory[filterNum], 1)
 						end
 						
-						local t = M.addServer(from or "UNKNOWN")
+						local t = M.addServer(from or UNKNOWN)
+						local d = date("%d %b %H:%M")
 
-						GlobalIgnoreDB.filterHistory[filterNum][#GlobalIgnoreDB.filterHistory[filterNum] + 1] = t .. "," .. message
+						GlobalIgnoreDB.filterHistory[filterNum][#GlobalIgnoreDB.filterHistory[filterNum] + 1] = d .. "," .. t .. "," .. message
 
 						M.GILUpdateChatCount()
 						M.GILUpdateBlockHistory(filterNum)
@@ -2096,6 +2098,9 @@ end
 -- CHAT COMMANDS --
 -------------------
 
+local function GILTest()
+end
+
 function M.ignoreFromCmd (argStr)
 	argStr = (M.trim(M.Proper(argStr)) or "")
 	local server
@@ -2141,6 +2146,8 @@ function SlashCmdList.GIGNORE (msg)
 	end
 	
 	if args[1] == "test" then
+	
+		GILTest()
 
 	elseif args[1] == "clear" then
 	

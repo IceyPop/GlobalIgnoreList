@@ -35,6 +35,7 @@ local FilterScrollButtons	= {}
 local FilterScrollSelect	= 0
 local BlockScrollPlayer		= {}
 local BlockScrollText		= {}
+local BlockScrollDate		= {}
 local WINDOW_WIDTH			= 734
 local WINDOW_HEIGHT			= 400
 local WINDOW_OFFSET			= 113
@@ -392,73 +393,146 @@ end
 
 function M.UpdateBlockButtons()
 	local winSize = 0
+
+	if Tab2BlockFilter > 0 then
+		Tab2FrameBlock.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. #GlobalIgnoreDB.filterHistory[Tab2BlockFilter] .. ")")
+	end
 	
 	for count = 1, #BlockScrollPlayer do
+		BlockScrollDate[count]:SetText("")
 		BlockScrollPlayer[count]:SetText("")
-		BlockScrollText[count]:SetText("")		
+		BlockScrollText[count]:SetText("")
 	end
 
+	local function clickMenu(target)
+		target = M.Proper(target)
+		
+		local index		= M.hasGlobalIgnored(target)
+		local pretty	= M.removeServer(target, true) .. "-" .. M.prettyServer(M.getServer(target))
+
+		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+			root:CreateTitle(pretty)
+			root:CreateDivider()
+			
+			if (index > 0) then
+				root:CreateButton(L["RCM_4"],
+					function()
+						C_FriendList.DelIgnore(index, true)
+					end)			
+			else		
+				root:CreateButton(L["RCM_6"],
+					function()
+						C_FriendList.AddOrDelIgnore(target)
+					end)
+			end
+			root:CreateDivider()			
+			root:CreateButton(L["RCM_5"],
+				function()					
+				end)			
+		end)
+	end
+	
 	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
 		local total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
 		local idx	= 0
 		
 		for count = total, 1, -1 do
 			idx = idx + 1
-			
-			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count]
-			local player	= "Unknown"
-			local comma		= string.find(text, ",")
-			
-			if comma then
-				player	= string.sub(text, 1, comma - 1)
-				text	= string.sub(text, comma + 1)
-			end
-			
-			if not BlockScrollPlayer[idx] then
-				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
-			end
-			
-			BlockScrollPlayer[idx]:SetWidth(220)
-			BlockScrollPlayer[idx]:SetJustifyH("LEFT");
-			BlockScrollPlayer[idx]:SetText(player)
-			-- Apparently I can set MouseClickEnabled but I can't trap Onclick for a fontstring :(
-			-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
-			-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
-			-- Seems I have to redo this all as buttons now or else see what I can do with that mouse event.  Probably should
-			-- be buttons though.
-			--BlockScrollPlayer[idx]:SetMouseClickEnabled(true)
-			--BlockScrollPlayer[idx]:SetScript("OnClick",
-				--function(self)
-				--	print("Clicked received")
-				--end
-			--)
 
+			local text = GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count]			
+			local dateStr, text = M.popWord(text, ",")			
+			local player, text = M.popWord(text, ",")
+			
+			if (player ~= "") then
+				player = M.removeServer(player, true) .. "-" .. M.prettyServer(M.getServer(player))
+			end
+
+			if not BlockScrollDate[idx] then
+				BlockScrollDate[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+			end
+
+			BlockScrollDate[idx].idx = idx	
+			BlockScrollDate[idx]:SetWidth(92)
+			BlockScrollDate[idx]:SetJustifyH("LEFT")
+			BlockScrollDate[idx]:SetJustifyV("TOP")
+			BlockScrollDate[idx]:SetHeight(300)
+			BlockScrollDate[idx]:SetText(dateStr)
+			BlockScrollDate[idx]:SetScript("OnMouseUp",
+				function(self, button)
+					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
+						return
+					end
+					if button == "RightButton" then
+						clickMenu(BlockScrollPlayer[self.idx]:GetText())
+					end
+				end
+			)			
+
+			if not BlockScrollPlayer[idx] then
+				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")				
+			end
+			
+			BlockScrollPlayer[idx]:SetWidth(180)
+			BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollDate[idx], "TOPRIGHT", 0, 0)			
+			BlockScrollPlayer[idx]:SetJustifyH("LEFT")
+			BlockScrollPlayer[idx]:SetJustifyV("TOP")			
+			BlockScrollPlayer[idx]:SetWordWrap(true)
+			BlockScrollPlayer[idx]:SetHeight(300)
+			BlockScrollPlayer[idx]:SetText(player)			
+			BlockScrollPlayer[idx]:SetScript("OnMouseUp",
+				function(self, button)				
+					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
+						return
+					end
+					if button == "RightButton" then
+						clickMenu(self:GetText())
+					end
+				end
+			)
 
 			if not BlockScrollText[idx] then
-				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")				
 			end
-			
+
+			BlockScrollText[idx].idx = idx	
 			BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
-			BlockScrollText[idx]:SetWidth(462)
-			BlockScrollText[idx]:SetJustifyH("LEFT");
-			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
+			BlockScrollText[idx]:SetWidth(414)
+			BlockScrollText[idx]:SetJustifyH("LEFT")
+			BlockScrollText[idx]:SetJustifyV("TOP")
+			BlockScrollText[idx]:SetWordWrap(true)			
+			BlockScrollText[idx]:SetHeight(300)
+			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)			
 			BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
+			BlockScrollText[idx]:SetDrawLayer("BACKGROUND", -8)
+			BlockScrollText[idx]:SetScript("OnMouseUp",
+				function(self, button)
+					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
+						return
+					end
+					if button == "RightButton" then
+						clickMenu(BlockScrollPlayer[self.idx]:GetText())
+					end
+				end
+			)
 			
 			local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
+			
+			BlockScrollText[idx]:SetHeight(oneSize)
+			BlockScrollPlayer[idx]:SetHeight(oneSize)
+			BlockScrollDate[idx]:SetHeight(oneSize)
 
-			winSize = winSize + oneSize + 10
+			winSize = winSize + oneSize
 
 			if idx == 1 then
-				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
+				BlockScrollDate[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
 			else
-				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -220, -10)
+				BlockScrollDate[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -272, -10)
 			end			
 		end
 	end
 	
-	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize + 10);
+	--Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize)
 end
-
 
 function M.FilterScrollBlockHistory()
 	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
@@ -1576,13 +1650,13 @@ local function CreateUIFrames()
 	
 	Tab2FrameBlock:SetScript("OnShow",
 		function(self)
-			self.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. #GlobalIgnoreDB.filterHistory[Tab2BlockFilter] .. ")")
 			M.UpdateBlockButtons()
 		end
 	)
 
-	createColumn("Player", 220, Tab2FrameBlock)
-	createColumn("Message", 470, Tab2FrameBlock)
+	createColumn("Date", 94, Tab2FrameBlock)
+	createColumn("Player", 180, Tab2FrameBlock)
+	createColumn("Message", 420, Tab2FrameBlock)
 	
 	-- BOTTOM BUTTONS
 	
@@ -1607,8 +1681,11 @@ local function CreateUIFrames()
 	
 	-- SCROLLING SLATE
 	
-	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockSlate", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
-	Tab2FrameBlock.Slate = CreateFrame("Frame");
+	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockScrollFrame", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
+	Tab2FrameBlock:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight())
+
+	Tab2FrameBlock.Slate = CreateFrame("Frame") --, "GilBlockSlate", Tab2FrameBlock.ScrollFrame);
+	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight())
 	
 	local name					= Tab2FrameBlock.ScrollFrame:GetName();
 	Tab2FrameBlock.ScrollBar	= _G[name.."ScrollBar"];
@@ -1624,7 +1701,7 @@ local function CreateUIFrames()
 	Tab2FrameBlock.ScrollBar:ClearAllPoints();
 	Tab2FrameBlock.ScrollBar:SetPoint("TOP", Tab2FrameBlock.ScrollUp, "BOTTOM", 0, -2);
 	Tab2FrameBlock.ScrollBar:SetPoint("BOTTOM", Tab2FrameBlock.ScrollDown, "TOP", 0, 2);
- 
+
 	Tab2FrameBlock.ScrollFrame:SetScrollChild(Tab2FrameBlock.Slate);	
 	Tab2FrameBlock.ScrollFrame:SetAllPoints(Tab2FrameBlock);
 	
