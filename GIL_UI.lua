@@ -35,6 +35,7 @@ local FilterScrollButtons	= {}
 local FilterScrollSelect	= 0
 local BlockScrollPlayer		= {}
 local BlockScrollText		= {}
+local BlockScrollDate		= {}
 local WINDOW_WIDTH			= 734
 local WINDOW_HEIGHT			= 400
 local WINDOW_OFFSET			= 113
@@ -1708,6 +1709,7 @@ local function CreateUIFrames()
 		end
 	)
 
+	--createColumn("Date", 94, Tab2FrameBlock)
 	createColumn("Player", 200, Tab2FrameBlock)
 	createColumn("Message", 490, Tab2FrameBlock)
 	
@@ -1734,7 +1736,7 @@ local function CreateUIFrames()
 	
 	-- SCROLLING SLATE
 	
-	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockSlate", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
+	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockScrollFrame", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
 	Tab2FrameBlock.Slate = CreateFrame("Frame");
 	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight());
 	
