@@ -312,7 +312,7 @@ function M.FilterListDrawUpdate (self)
 	for count = 1, BUTTON_TOTAL do
 		index = count + offset
 				
-		if index <= #GlobalIgnoreDB.filterList then
+		if GlobalIgnoreDB.filterList[index] then
 			pName = GlobalIgnoreDB.filterDesc[index]
 			
 			FilterScrollButtons[count].name:SetText(GlobalIgnoreDB.filterDesc[index])
@@ -390,10 +390,25 @@ local function CreateFilterButtons()
 	M.FilterListDrawUpdate(FilterScrollFrame)
 end
 
+local function RemoveBlockEntry(filterNum, entry)
+	-- adjust "latest" if the removal would shift it
+	local filterHistoryLast = GlobalIgnoreDB.filterHistoryLast[filterNum]
+	if entry <= filterHistoryLast then
+		GlobalIgnoreDB.filterHistoryLast[filterNum] = filterHistoryLast - 1
+	end
+	table.remove(GlobalIgnoreDB.filterHistory[filterNum],entry)
+	M.GILUpdateBlockHistory(filterNum)
+end
+
 local function RemoveBlockEntriesByPlayer(filterNum, name)
 	if GlobalIgnoreDB.filterHistory[filterNum] then
 		for index = #GlobalIgnoreDB.filterHistory[filterNum], 1, -1 do
 			if GlobalIgnoreDB.filterHistory[filterNum][index].s == name then
+				-- adjust "latest" if the removal would shift it
+				local filterHistoryLast = GlobalIgnoreDB.filterHistoryLast[filterNum]
+				if index <= filterHistoryLast then
+					GlobalIgnoreDB.filterHistoryLast[filterNum] = filterHistoryLast - 1
+				end
 				table.remove(GlobalIgnoreDB.filterHistory[filterNum], index)
 			end
 		end
@@ -401,8 +416,63 @@ local function RemoveBlockEntriesByPlayer(filterNum, name)
 	M.GILUpdateBlockHistory(filterNum)
 end
 
+local function UpdateBlockButton(idx,count,winSize)
+	-- fields: m=message, s=source, t=timestamp, c=channelnum, n=channelname, i=filternum
+	local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].m
+	local player	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].s
+	local tstamp 	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].t
+	local channel = GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].n
+
+	if not BlockScrollPlayer[idx] then
+		BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+	end
+	BlockScrollPlayer[idx]:Show()
+	BlockScrollPlayer[idx]:SetWidth(200)
+	BlockScrollPlayer[idx]:SetJustifyH("LEFT");
+	BlockScrollPlayer[idx]:SetText(player)
+	BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
+		if button == "RightButton" then
+			-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
+			-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
+			M.BlockScrollPlayerClick(self, button, count)
+		end
+	end)
+
+	if not BlockScrollText[idx] then
+		BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+	end
+	BlockScrollText[idx]:Show()
+	BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
+	BlockScrollText[idx]:SetWidth(482)
+	BlockScrollText[idx]:SetJustifyH("LEFT");
+	BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
+	BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
+	BlockScrollText[idx].tooltip = {t=tstamp,c=channel}
+	BlockScrollText[idx]:SetScript("OnEnter", M.BlockScrollTextOnEnter)
+	BlockScrollText[idx]:SetScript("OnLeave", M.BlockScrollTextOnLeave)
+	BlockScrollText[idx]:SetScript("OnHide", M.BlockScrollTextOnLeave)
+	BlockScrollText[idx]:SetScript("OnMouseUp", function(self,button)
+			if button == "RightButton" then
+				-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
+				-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
+				M.BlockScrollPlayerClick(BlockScrollPlayer[idx], button, count)
+			end
+		end)
+
+	if idx == 1 then
+		BlockScrollPlayer[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
+	else
+		BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -200, -10)
+	end
+
+	local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
+	winSize = winSize + oneSize + 10
+
+	return winSize
+end
+
 function M.UpdateBlockButtons()
-	local winSize, total = 0, 0
+	local winSize, total, last = 0, 0
 
 	for count = 1, #BlockScrollPlayer do
 		BlockScrollPlayer[count]:SetText("")
@@ -414,54 +484,18 @@ function M.UpdateBlockButtons()
 
 	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
 		total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
+		last = GlobalIgnoreDB.filterHistoryLast[Tab2BlockFilter]
 		local idx	= 0
 		
-		for count = total, 1, -1 do
+		for count = last, 1, -1 do
 			idx = idx + 1
-			-- fields: m=message, s=source, t=timestamp, c=channelnum, n=channelname, i=filternum
-			local text		= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].m
-			local player	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].s
-			local tstamp 	= GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].t
-			local channel = GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count].n
-			
-			if not BlockScrollPlayer[idx] then
-				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+			winSize = UpdateBlockButton(idx,count,winSize)
+		end
+		if total > last then
+			for count = total, last+1, -1 do
+				idx = idx + 1
+				winSize = UpdateBlockButton(idx,count,winSize)
 			end
-			BlockScrollPlayer[idx]:Show()
-			BlockScrollPlayer[idx]:SetWidth(220)
-			BlockScrollPlayer[idx]:SetJustifyH("LEFT");
-			BlockScrollPlayer[idx]:SetText(player)
-			BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
-				if button == "RightButton" then
-					-- Goal is to add right click to add person to ignore, remove history entry, remove all history entries,
-					-- remove all entries by the selected sender, or edit filter and then cancel for right click menu options
-					M.BlockScrollPlayerClick(self, button, count)
-				end
-			end)
-
-			if not BlockScrollText[idx] then
-				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
-			end
-			BlockScrollText[idx]:Show()
-			BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
-			BlockScrollText[idx]:SetWidth(462)
-			BlockScrollText[idx]:SetJustifyH("LEFT");
-			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
-			BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
-			BlockScrollText[idx].tooltip = {t=tstamp,c=channel}
-			BlockScrollText[idx]:SetScript("OnEnter", M.BlockScrollTextOnEnter)
-			BlockScrollText[idx]:SetScript("OnLeave", M.BlockScrollTextOnLeave)
-			BlockScrollText[idx]:SetScript("OnHide", M.BlockScrollTextOnLeave)
-			
-			local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
-
-			winSize = winSize + oneSize + 10
-
-			if idx == 1 then
-				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
-			else
-				BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -220, -10)
-			end			
 		end
 	end
 	if Tab2BlockFilter and Tab2BlockFilter > 0 then
@@ -511,8 +545,7 @@ function M.BlockScrollPlayerClick(self, button, entry)
 		root:CreateButton("Remove Entry", -- TODO: localization
 			function()
 				if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] and GlobalIgnoreDB.filterHistory[Tab2BlockFilter][entry] then
-					table.remove(GlobalIgnoreDB.filterHistory[Tab2BlockFilter],entry)
-					M.GILUpdateBlockHistory(Tab2BlockFilter)
+					RemoveBlockEntry(Tab2BlockFilter, entry)
 				end
 			end)
 		root:CreateButton("Remove All Entries by Player", -- TODO localization
@@ -523,6 +556,7 @@ function M.BlockScrollPlayerClick(self, button, entry)
 		root:CreateButton(L["RCM_15"],
 			function()
 				GlobalIgnoreDB.filterHistory[Tab2BlockFilter] = {}
+				GlobalIgnoreDB.filterHistoryLast[Tab2BlockFilter] = 0
 				M.GILUpdateBlockHistory(Tab2BlockFilter)
 			end)
 		root:CreateDivider()
@@ -599,6 +633,7 @@ function M.FilterScrollClick(self, button, down)
 			root:CreateButton(L["RCM_15"],
 				function()
 					GlobalIgnoreDB.filterHistory[FilterScrollSelect] = {}
+					GlobalIgnoreDB.filterHistoryLast[FilterScrollSelect] = 0
 				end)
 				
 			root:CreateDivider()			
@@ -636,7 +671,7 @@ local function IgnoreListDrawUpdate (self)
 	for count = 1, BUTTON_TOTAL do
 		id = count + offset
 		
-		if id <= #GlobalIgnoreDB.ignoreList then		
+		if GlobalIgnoreDB.ignoreList[id] then
 			index = IgnoreScrollIndex[id] or id
 			pName = GlobalIgnoreDB.ignoreList[index]
 			temp  = string.find(pName, "-", 1, true)
@@ -1379,6 +1414,7 @@ local function CreateUIFrames()
 			GlobalIgnoreDB.filterActive[idx]	= false
 			GlobalIgnoreDB.filterID[idx]		= ""
 			GlobalIgnoreDB.filterHistory[idx]	= {}
+			GlobalIgnoreDB.filterHistoryLast[idx] = 0
 			
 			M.FilterListDrawUpdate(FilterScrollFrame)
 		end)
@@ -1672,8 +1708,8 @@ local function CreateUIFrames()
 		end
 	)
 
-	createColumn("Player", 220, Tab2FrameBlock)
-	createColumn("Message", 470, Tab2FrameBlock)
+	createColumn("Player", 200, Tab2FrameBlock)
+	createColumn("Message", 490, Tab2FrameBlock)
 	
 	-- BOTTOM BUTTONS
 	
@@ -1700,6 +1736,7 @@ local function CreateUIFrames()
 	
 	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockSlate", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
 	Tab2FrameBlock.Slate = CreateFrame("Frame");
+	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight());
 	
 	local name					= Tab2FrameBlock.ScrollFrame:GetName();
 	Tab2FrameBlock.ScrollBar	= _G[name.."ScrollBar"];
@@ -1717,6 +1754,7 @@ local function CreateUIFrames()
 	Tab2FrameBlock.ScrollBar:SetPoint("BOTTOM", Tab2FrameBlock.ScrollDown, "TOP", 0, 2);
  
 	Tab2FrameBlock.ScrollFrame:SetScrollChild(Tab2FrameBlock.Slate);	
+	Tab2FrameBlock.ScrollFrame:SetClipsChildren(true)
 	Tab2FrameBlock.ScrollFrame:SetAllPoints(Tab2FrameBlock);
 	
 	M.UpdateBlockButtons()
@@ -1751,6 +1789,7 @@ local function CreateUIFrames()
 	Tab3Frame.ScrollBar:SetPoint("BOTTOM", Tab3Frame.ScrollDown, "TOP", 0, 2);
  
 	Tab3Frame.ScrollFrame:SetScrollChild(Tab3Frame.Slate);	
+	Tab3Frame.ScrollFrame:SetClipsChildren(true);
 	Tab3Frame.ScrollFrame:SetAllPoints(Tab3Frame);
  
 	-- Plot options on our scrolling slate
