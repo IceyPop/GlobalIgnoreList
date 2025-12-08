@@ -14,12 +14,6 @@ Creating a new chat filter will now create the filter turned off by default
 
 Updated for latest retail, classic, and era versions
 
-=> 11.2.5.1
-
-When viewing chat filters, right clicking on a filter will now bring up a menu with filter options similar to the ignore list UI.  This right click menu can be used to edit, remove, reset stats or view block history
-
-New button in chat filters tab to view block history of the selected filter.
-
 => 11.2.5.0
 
 Updated for latest WoW patch
