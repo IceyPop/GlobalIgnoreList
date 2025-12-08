@@ -12,6 +12,8 @@ Moved "Send ignore response to ignored players" option under Ignore List Options
 
 Creating a new chat filter will now create the filter turned off by default
 
+Global Ignore will now show up under the "Chat & Communications" category in the addon listing in WoW
+
 Updated for latest retail, classic, and era versions
 
 => 11.2.5.0
