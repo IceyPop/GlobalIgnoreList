@@ -10,8 +10,8 @@ local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.needSorted		= true
-V.nameUI			= ""
+V.needSorted					= true
+V.nameUI							= ""
 
 local MainFrame				= nil
 local Tab1Frame				= nil
@@ -69,28 +69,15 @@ StaticPopupDialogs["GIL_REASON"] = {
 	button2        = L["BOX_5"],
   
 	OnShow = function(self)
-		if V.wowIsERA == true then
-			self.editBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
-			self.editBox:SetFocus()
-		else
-			self.EditBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
-			self.EditBox:SetFocus()
-		end
+		self.EditBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
+		self.EditBox:SetFocus()
 	end,
 	OnAccept = function(self)
-		if V.wowIsERA == true then
-			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.editBox:GetText()
-		else
-			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.EditBox:GetText()
-		end
+		GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.EditBox:GetText()
 		M.GILUpdateUI()
 	end,
 	EditBoxOnEnterPressed = function(self)
-		if V.wowIsERA == true then
-			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().editBox:GetText()
-		else
-			GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().EditBox:GetText()
-		end
+		GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().EditBox:GetText()
 		self:GetParent():Hide()
 		M.GILUpdateUI()
 	end,
@@ -134,21 +121,12 @@ StaticPopupDialogs["GIL_PRUNE"] = {
 	button2        = L["BOX_5"],
   
 	OnShow = function(self)
-		if V.wowIsERA == true then
-			self.editBox:SetText("365")
-			self.editBox:SetFocus()
-		else
-			self.EditBox:SetText("365")
-			self.EditBox:SetFocus()
-		end
+		self.EditBox:SetText("365")
+		self.EditBox:SetFocus()
 	end,
 	OnAccept = function(self)
 		local d = nil
-		if V.wowIsERA == true then
-			d = tonumber(self.editBox:GetText());
-		else
-			d = tonumber(self.EditBox:GetText());
-		end
+		d = tonumber(self.EditBox:GetText());
 		if (d and d > 0) then
 			local c = M.PruneIgnoreList(d, false);
 			local f = StaticPopup_Show("GIL_CONFIRMPRUNE", c);
@@ -174,27 +152,14 @@ StaticPopupDialogs["GIL_EXPIRE"] = {
 	button2        = L["BOX_5"],
   
 	OnShow         = function(self)
-		if V.wowIsERA == true then
-			self.editBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
-			self.editBox:SetFocus()
-		else
-			self.EditBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
-			self.EditBox:SetFocus()
-		end
+		self.EditBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
+		self.EditBox:SetFocus()
 	end,
 	OnAccept       = function(self)
-		if V.wowIsERA == true then
-			setExpire(self.editBox:GetText())
-		else
-			setExpire(self.EditBox:GetText())
-		end
+		setExpire(self.EditBox:GetText())
 	end,
 	EditBoxOnEnterPressed = function(self)
-		if V.wowIsERA == true then
-			setExpire(self:GetParent().editBox:GetText())
-		else
-			setExpire(self:GetParent().EditBox:GetText())
-		end
+		setExpire(self:GetParent().EditBox:GetText())
 		self:GetParent():Hide()
 	end,
 	EditBoxOnEscapePressed = function(self)
@@ -313,7 +278,7 @@ function M.FilterListDrawUpdate (self)
 	for count = 1, BUTTON_TOTAL do
 		index = count + offset
 				
-		if index <= #GlobalIgnoreDB.filterList then
+		if GlobalIgnoreDB.filterList[index] then
 			pName = GlobalIgnoreDB.filterDesc[index]
 			
 			FilterScrollButtons[count].name:SetText(GlobalIgnoreDB.filterDesc[index])
@@ -391,147 +356,195 @@ local function CreateFilterButtons()
 	M.FilterListDrawUpdate(FilterScrollFrame)
 end
 
-function M.UpdateBlockButtons()
-	local winSize = 0
-
-	if Tab2BlockFilter > 0 then
-		Tab2FrameBlock.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. #GlobalIgnoreDB.filterHistory[Tab2BlockFilter] .. ")")
+local function RemoveBlockEntry (filterNum, entry)
+	-- adjust "latest" if the removal would shift it
+	local filterBlockedLast = GlobalIgnoreDB.filterBlockedLast[filterNum]
+	
+	if entry <= filterBlockedLast then
+		GlobalIgnoreDB.filterBlockedLast[filterNum] = filterBlockedLast - 1
 	end
 	
-	for count = 1, #BlockScrollPlayer do
-		BlockScrollDate[count]:SetText("")
-		BlockScrollPlayer[count]:SetText("")
-		BlockScrollText[count]:SetText("")
-	end
-
-	local function clickMenu(target)
-		target = M.Proper(target)
-		
-		local index		= M.hasGlobalIgnored(target)
-		local pretty	= M.removeServer(target, true) .. "-" .. M.prettyServer(M.getServer(target))
-
-		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
-			root:CreateTitle(pretty)
-			root:CreateDivider()
-			
-			if (index > 0) then
-				root:CreateButton(L["RCM_4"],
-					function()
-						C_FriendList.DelIgnore(index, true)
-					end)			
-			else		
-				root:CreateButton(L["RCM_6"],
-					function()
-						C_FriendList.AddOrDelIgnore(target)
-					end)
-			end
-			root:CreateDivider()			
-			root:CreateButton(L["RCM_5"],
-				function()					
-				end)			
-		end)
-	end
+	table.remove(GlobalIgnoreDB.filterBlocked[filterNum], entry)
 	
-	if GlobalIgnoreDB.filterHistory[Tab2BlockFilter] then
-		local total	= #GlobalIgnoreDB.filterHistory[Tab2BlockFilter]
-		local idx	= 0
-		
-		for count = total, 1, -1 do
-			idx = idx + 1
+	M.GILUpdateBlockHistory(filterNum)
+end
 
-			local text = GlobalIgnoreDB.filterHistory[Tab2BlockFilter][count]			
-			local dateStr, text = M.popWord(text, ",")			
-			local player, text = M.popWord(text, ",")
-			
-			if (player ~= "") then
-				player = M.removeServer(player, true) .. "-" .. M.prettyServer(M.getServer(player))
-			end
+local function RemoveBlockEntriesByPlayer (filterNum, name)
 
-			if not BlockScrollDate[idx] then
-				BlockScrollDate[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
-			end
-
-			BlockScrollDate[idx].idx = idx	
-			BlockScrollDate[idx]:SetWidth(92)
-			BlockScrollDate[idx]:SetJustifyH("LEFT")
-			BlockScrollDate[idx]:SetJustifyV("TOP")
-			BlockScrollDate[idx]:SetHeight(300)
-			BlockScrollDate[idx]:SetText(dateStr)
-			BlockScrollDate[idx]:SetScript("OnMouseUp",
-				function(self, button)
-					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
-						return
-					end
-					if button == "RightButton" then
-						clickMenu(BlockScrollPlayer[self.idx]:GetText())
-					end
+	if GlobalIgnoreDB.filterBlocked[filterNum] then
+		for index = #GlobalIgnoreDB.filterBlocked[filterNum], 1, -1 do
+			if GlobalIgnoreDB.filterBlocked[filterNum][index].s == name then
+				-- adjust "latest" if the removal would shift it
+				local filterBlockedLast = GlobalIgnoreDB.filterBlockedLast[filterNum]
+				if index <= filterBlockedLast then
+					GlobalIgnoreDB.filterBlockedLast[filterNum] = filterBlockedLast - 1
 				end
-			)			
-
-			if not BlockScrollPlayer[idx] then
-				BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")				
+				
+				table.remove(GlobalIgnoreDB.filterBlocked[filterNum], index)
 			end
-			
-			BlockScrollPlayer[idx]:SetWidth(180)
-			BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollDate[idx], "TOPRIGHT", 0, 0)			
-			BlockScrollPlayer[idx]:SetJustifyH("LEFT")
-			BlockScrollPlayer[idx]:SetJustifyV("TOP")			
-			BlockScrollPlayer[idx]:SetWordWrap(true)
-			BlockScrollPlayer[idx]:SetHeight(300)
-			BlockScrollPlayer[idx]:SetText(player)			
-			BlockScrollPlayer[idx]:SetScript("OnMouseUp",
-				function(self, button)				
-					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
-						return
-					end
-					if button == "RightButton" then
-						clickMenu(self:GetText())
-					end
-				end
-			)
-
-			if not BlockScrollText[idx] then
-				BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")				
-			end
-
-			BlockScrollText[idx].idx = idx	
-			BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
-			BlockScrollText[idx]:SetWidth(414)
-			BlockScrollText[idx]:SetJustifyH("LEFT")
-			BlockScrollText[idx]:SetJustifyV("TOP")
-			BlockScrollText[idx]:SetWordWrap(true)			
-			BlockScrollText[idx]:SetHeight(300)
-			BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)			
-			BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
-			BlockScrollText[idx]:SetDrawLayer("BACKGROUND", -8)
-			BlockScrollText[idx]:SetScript("OnMouseUp",
-				function(self, button)
-					if not MouseIsOver(Tab2FrameBlock.ScrollFrame) then
-						return
-					end
-					if button == "RightButton" then
-						clickMenu(BlockScrollPlayer[self.idx]:GetText())
-					end
-				end
-			)
-			
-			local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
-			
-			BlockScrollText[idx]:SetHeight(oneSize)
-			BlockScrollPlayer[idx]:SetHeight(oneSize)
-			BlockScrollDate[idx]:SetHeight(oneSize)
-
-			winSize = winSize + oneSize
-
-			if idx == 1 then
-				BlockScrollDate[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
-			else
-				BlockScrollDate[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -272, -10)
-			end			
 		end
 	end
 	
-	--Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize)
+	M.GILUpdateBlockHistory(filterNum)
+end
+
+local function UpdateBlockButton(idx, count, winSize)
+	-- Fields: m=message, s=source, t=timestamp, c=channelnum, n=channelname, i=filternum
+	local text		= GlobalIgnoreDB.filterBlocked[Tab2BlockFilter][count].m
+	local player	= GlobalIgnoreDB.filterBlocked[Tab2BlockFilter][count].s
+	local tstamp	= GlobalIgnoreDB.filterBlocked[Tab2BlockFilter][count].t
+	local channel	= GlobalIgnoreDB.filterBlocked[Tab2BlockFilter][count].n
+
+	if not BlockScrollPlayer[idx] then
+		BlockScrollPlayer[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+	end
+	
+	BlockScrollPlayer[idx]:Show()
+	BlockScrollPlayer[idx]:SetWidth(200)
+	BlockScrollPlayer[idx]:SetJustifyH("LEFT");
+	BlockScrollPlayer[idx]:SetText(player)
+	BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
+		if button == "RightButton" then
+			M.BlockScrollPlayerClick(self, button, count)
+		end
+	end)
+
+	if not BlockScrollText[idx] then
+		BlockScrollText[idx] = Tab2FrameBlock.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormal")
+	end
+	
+	BlockScrollText[idx]:Show()
+	BlockScrollText[idx]:SetPoint("TOPLEFT", BlockScrollPlayer[idx], "TOPRIGHT", 0, 0)
+	BlockScrollText[idx]:SetWidth(482)
+	BlockScrollText[idx]:SetJustifyH("LEFT");
+	BlockScrollText[idx]:SetText("|cFFFFC0C0" .. text)
+	BlockScrollText[idx]:SetFont(DEFAULT_CHAT_FRAME:GetFont(), 14)
+	BlockScrollText[idx].tooltip = {t=tstamp,c=channel}
+	BlockScrollText[idx]:SetScript("OnEnter", M.BlockScrollTextOnEnter)
+	BlockScrollText[idx]:SetScript("OnLeave", M.BlockScrollTextOnLeave)
+	BlockScrollText[idx]:SetScript("OnHide", M.BlockScrollTextOnLeave)
+	BlockScrollText[idx]:SetScript("OnMouseUp",
+		function(self,button)
+			if button == "RightButton" then
+				M.BlockScrollPlayerClick(BlockScrollPlayer[idx], button, count)
+			end
+		end
+	)
+
+	if idx == 1 then
+		BlockScrollPlayer[idx]:SetPoint("TOPLEFT", Tab2FrameBlock.Slate, "TOPLEFT", 10, -10)
+	else
+		BlockScrollPlayer[idx]:SetPoint("TOPLEFT", BlockScrollText[idx - 1], "BOTTOMLEFT", -200, -10)
+	end
+
+	local oneSize = math.max(BlockScrollText[idx]:GetStringHeight(), BlockScrollPlayer[idx]:GetStringHeight())
+	winSize = winSize + oneSize + 10
+
+	return winSize
+end
+
+function M.UpdateBlockButtons()
+	local winSize, total, last = 0, 0
+
+	for count = 1, #BlockScrollPlayer do
+		BlockScrollPlayer[count]:SetText("")
+		BlockScrollText[count]:SetText("")		
+		BlockScrollText[count].tooltip = nil
+		BlockScrollPlayer[count]:Hide()
+		BlockScrollText[count]:Hide()
+	end
+
+	if GlobalIgnoreDB.filterBlocked[Tab2BlockFilter] then
+		total		= #GlobalIgnoreDB.filterBlocked[Tab2BlockFilter]
+		last		= GlobalIgnoreDB.filterBlockedLast[Tab2BlockFilter]
+		local idx	= 0
+		
+		for count = last, 1, -1 do
+			idx = idx + 1
+			winSize = UpdateBlockButton(idx, count, winSize)
+		end
+		
+		if total > last then
+			for count = total, last+1, -1 do
+				idx = idx + 1
+				winSize = UpdateBlockButton(idx, count, winSize)
+			end
+		end
+	end
+	if Tab2BlockFilter and Tab2BlockFilter > 0 then
+		Tab2FrameBlock.InfoText:SetText("Block history for |cffffff00" .. GlobalIgnoreDB.filterDesc[Tab2BlockFilter] .. "|cffffffff (" .. total .. ")")
+	end
+	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), winSize + 10);
+end
+
+
+function M.BlockScrollTextOnEnter (self)
+	if self.tooltip then
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddDoubleLine(L["COL_12"],L["TIP_3"])
+		GameTooltip:AddDoubleLine(self.tooltip.t, self.tooltip.c, 220/255, 220/255, 220/255, 153/255, 153/255, 102/255)
+		GameTooltip:Show()
+	end
+end
+
+
+function M.BlockScrollTextOnLeave (self)
+	if GameTooltip:GetOwner() == self then
+		GameTooltip_Hide()
+	end
+end
+
+function M.BlockScrollPlayerClick(self, button, entry)
+	local name = self:GetText()
+	name = M.Proper(M.addServer(name))
+	if not (name and #name>=2) then return end
+	local index = M.hasGlobalIgnored(name)
+	local isIgnored = index and index > 0
+	MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+		root:CreateTitle(name)
+		root:CreateDivider()
+		if isIgnored then
+			root:CreateButton(L["RCM_4"],
+				function()
+					C_FriendList.DelIgnore(name)
+				end)
+		else
+			root:CreateButton(L["RCM_6"],
+				function()
+					C_FriendList.AddOrDelIgnore(name)
+				end)
+		end
+		
+		--root:CreateDivider()
+		--root:CreateButton("Remove Entry", -- TODO: localization
+		--	function()
+		--		if GlobalIgnoreDB.filterBlocked[Tab2BlockFilter] and GlobalIgnoreDB.filterBlocked[Tab2BlockFilter][entry] then
+		--			RemoveBlockEntry(Tab2BlockFilter, entry)
+	 	--		end
+		--	end)
+		--root:CreateButton("Remove All Entries by Player", -- TODO localization
+		--	function()
+		--		RemoveBlockEntriesByPlayer(Tab2BlockFilter, name)
+		--	end)
+		
+		root:CreateDivider()
+		root:CreateButton(L["RCM_15"],
+			function()
+				GlobalIgnoreDB.filterBlocked[Tab2BlockFilter] = {}
+				GlobalIgnoreDB.filterBlockedLast[Tab2BlockFilter] = 0
+				M.GILUpdateBlockHistory(Tab2BlockFilter)
+			end)
+		root:CreateDivider()
+		root:CreateButton(L["RCM_11"],
+			function()
+				FilterScrollSelect = Tab2BlockFilter
+				M.FilterScrollEditMenu()
+			end)
+		root:CreateDivider()
+		root:CreateButton(L["RCM_5"],
+			function()
+			end)
+	end)
 end
 
 function M.FilterScrollBlockHistory()
@@ -548,11 +561,11 @@ end
 
 function M.FilterScrollEditMenu()
 	if GlobalIgnoreDB.filterDesc[FilterScrollSelect] ~= nil then
-
+	
 		Tab2EditDesc   = GlobalIgnoreDB.filterDesc[FilterScrollSelect]
 		Tab2EditFilter = GlobalIgnoreDB.filterList[FilterScrollSelect]
 		Tab2EditActive = GlobalIgnoreDB.filterActive[FilterScrollSelect]
-		
+
 		M.FilterScrollChangeState(1)
 	end
 end
@@ -570,40 +583,46 @@ function M.FilterScrollClick(self, button, down)
 	end
 	
 	if button == "RightButton" then	
-		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
-			root:CreateTitle(L["RCM_10"])
-			root:CreateDivider()
-			root:CreateButton(L["RCM_11"],
-				function()
-					M.FilterScrollEditMenu()
-				end)
-			root:CreateButton(L["RCM_12"],
-				function()
-					ButtonFilterRemove()
-				end)
-			root:CreateDivider()				
-			root:CreateButton(L["RCM_13"] .. " (" .. #GlobalIgnoreDB.filterHistory[FilterScrollSelect] .. ")",
-				function()
-					M.FilterScrollBlockHistory()
-				end)			
-			root:CreateDivider()	
-			root:CreateButton(L["RCM_14"],
-				function()
-					GlobalIgnoreDB.filterCount[FilterScrollSelect] = 0
-					M.GILUpdateChatCount()
-				end)
-			root:CreateButton(L["RCM_15"],
-				function()
-					GlobalIgnoreDB.filterHistory[FilterScrollSelect] = {}
-				end)
-				
-			root:CreateDivider()			
-			root:CreateButton(L["RCM_5"],
-				function()					
-				end)			
-		end)
+		MenuUtil.CreateContextMenu(UIParent,
+			function(ownerRegion, root)
+				root:CreateTitle(L["RCM_10"])
+				root:CreateDivider()
+				root:CreateButton(L["RCM_11"],
+					function()
+						M.FilterScrollEditMenu()
+					end
+				)
+				root:CreateButton(L["RCM_12"],
+					function()
+						ButtonFilterRemove()
+					end
+				)
+				root:CreateDivider()				
+				root:CreateButton(L["RCM_13"] .. " (" .. #GlobalIgnoreDB.filterBlocked[FilterScrollSelect] .. ")",
+					function()
+						M.FilterScrollBlockHistory()
+					end
+				)
+				root:CreateDivider()	
+				root:CreateButton(L["RCM_14"],
+					function()
+						GlobalIgnoreDB.filterCount[FilterScrollSelect] = 0
+						M.GILUpdateChatCount()
+					end
+				)
+				root:CreateButton(L["RCM_15"],
+					function()
+						GlobalIgnoreDB.filterBlocked[FilterScrollSelect] = {}
+						GlobalIgnoreDB.filterBlockedLast[FilterScrollSelect] = 0
+					end
+				)				
+				root:CreateDivider()			
+				root:CreateButton(L["RCM_5"],
+					function()
+					end)
+			end
+		)
 	end
-	
 end
 
 --------------------------
@@ -632,7 +651,7 @@ local function IgnoreListDrawUpdate (self)
 	for count = 1, BUTTON_TOTAL do
 		id = count + offset
 		
-		if id <= #GlobalIgnoreDB.ignoreList then		
+		if GlobalIgnoreDB.ignoreList[id] then
 			index = IgnoreScrollIndex[id] or id
 			pName = GlobalIgnoreDB.ignoreList[index]
 			temp  = string.find(pName, "-", 1, true)
@@ -1369,12 +1388,13 @@ local function CreateUIFrames()
 		function(self)
 			local idx = #GlobalIgnoreDB.filterList + 1
 			
-			GlobalIgnoreDB.filterList[idx]		= "[word=NewChatFilter]"
-			GlobalIgnoreDB.filterDesc[idx]		= "New Chat Filter"
-			GlobalIgnoreDB.filterCount[idx]		= 0
-			GlobalIgnoreDB.filterActive[idx]	= false
-			GlobalIgnoreDB.filterID[idx]		= ""
-			GlobalIgnoreDB.filterHistory[idx]	= {}
+			GlobalIgnoreDB.filterList[idx]			= "[word=NewChatFilter]"
+			GlobalIgnoreDB.filterDesc[idx]			= "New Chat Filter"
+			GlobalIgnoreDB.filterCount[idx]			= 0
+			GlobalIgnoreDB.filterActive[idx]		= false
+			GlobalIgnoreDB.filterID[idx]			= ""
+			GlobalIgnoreDB.filterBlocked[idx]		= {}
+			GlobalIgnoreDB.filterBlockedLast[idx]	= 0
 			
 			M.FilterListDrawUpdate(FilterScrollFrame)
 		end)
@@ -1388,11 +1408,11 @@ local function CreateUIFrames()
 			ButtonFilterRemove()
 		end
 	)
-
+	
 	local Button = CreateFrame("Button", "GILFrame2BlockButton", Tab2Frame, "UIPanelButtonTemplate")	
 	Button:SetSize(110, 22)
 	Button:SetText(L["BUT_9"])
-	Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)	
+	Button:SetPoint("RIGHT", "GILFrame2RemoveButton", "LEFT", 0, 0)
 	Button:SetScript("OnClick",
 		function(self)
 			M.FilterScrollBlockHistory()
@@ -1426,7 +1446,7 @@ local function CreateUIFrames()
 			self.InfoText:SetText(format(L["INFO_3"], (GlobalIgnoreDB.filterCount[FilterScrollSelect] or 0)))
 		end
 	)
-	
+
 	-- BOTTOM BUTTONS
 	
 	local Button = CreateFrame("Button", "GILFrame2EditCancelButton", Tab2FrameEdit, "UIPanelButtonTemplate")
@@ -1470,7 +1490,10 @@ local function CreateUIFrames()
 	Tab2FrameEdit.InfoText:SetWidth(250)
 	Tab2FrameEdit.InfoText:SetJustifyH("RIGHT")
 	Tab2FrameEdit.InfoText:SetPoint("TOPRIGHT", -48 , -24)
-	
+	Tab2FrameEdit.InfoText:SetScript("OnMouseUp", function(self, button)
+		M.FilterScrollBlockHistory()
+	end)
+
 	---
 
 	Button = Tab2FrameEdit:CreateFontString("GILFrame2ActiveText", "OVERLAY", "GameFontHighlight")
@@ -1570,7 +1593,7 @@ local function CreateUIFrames()
 		function(self)
 			GameTooltip:Hide()
 		end)
-	
+
 	Button = CreateFrame("Button", "GILFrame2EditTestTest", Tab2FrameEdit, "UIPanelButtonTemplate")
 	Button:SetSize(38, 18)
 	Button:SetNormalFontObject("GameFontNormalSmall")
@@ -1593,6 +1616,17 @@ local function CreateUIFrames()
 				GILFrame2EditTestResult:SetText("|cff00ff96PASSED")			
 			end
 		end)
+
+	-- Debating if this will be confusing ie people will view block history without saving their filter and thing its broken
+	--Button = CreateFrame("Button", "GILFrame2EditBlockHistory", Tab2FrameEdit, "UIPanelButtonTemplate")
+	--Button:SetSize(100, 18)
+	--Button:SetNormalFontObject("GameFontNormalSmall")
+	--Button:SetText(L["BUT_9"])
+	--Button:SetPoint("BOTTOMLEFT", "GILFrame2EditTestField", "BOTTOMRIGHT", 15, -5)
+	--Button:SetScript("OnClick",
+	--	function(self)
+	--		M.FilterScrollBlockHistory()
+	--	end)
 
 	---
 
@@ -1654,9 +1688,9 @@ local function CreateUIFrames()
 		end
 	)
 
-	createColumn("Date", 94, Tab2FrameBlock)
-	createColumn("Player", 180, Tab2FrameBlock)
-	createColumn("Message", 420, Tab2FrameBlock)
+	--createColumn("Date", 94, Tab2FrameBlock)
+	createColumn("Player", 200, Tab2FrameBlock)
+	createColumn("Message", 490, Tab2FrameBlock)
 	
 	-- BOTTOM BUTTONS
 	
@@ -1682,10 +1716,8 @@ local function CreateUIFrames()
 	-- SCROLLING SLATE
 	
 	Tab2FrameBlock.ScrollFrame = CreateFrame("ScrollFrame", "GILBlockScrollFrame", Tab2FrameBlock, "UIPanelScrollFrameTemplate");
-	Tab2FrameBlock:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight())
-
-	Tab2FrameBlock.Slate = CreateFrame("Frame") --, "GilBlockSlate", Tab2FrameBlock.ScrollFrame);
-	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight())
+	Tab2FrameBlock.Slate = CreateFrame("Frame");
+	Tab2FrameBlock.Slate:SetSize(Tab2FrameBlock:GetWidth(), Tab2FrameBlock:GetHeight());
 	
 	local name					= Tab2FrameBlock.ScrollFrame:GetName();
 	Tab2FrameBlock.ScrollBar	= _G[name.."ScrollBar"];
@@ -1701,12 +1733,13 @@ local function CreateUIFrames()
 	Tab2FrameBlock.ScrollBar:ClearAllPoints();
 	Tab2FrameBlock.ScrollBar:SetPoint("TOP", Tab2FrameBlock.ScrollUp, "BOTTOM", 0, -2);
 	Tab2FrameBlock.ScrollBar:SetPoint("BOTTOM", Tab2FrameBlock.ScrollDown, "TOP", 0, 2);
-
+ 
 	Tab2FrameBlock.ScrollFrame:SetScrollChild(Tab2FrameBlock.Slate);	
+	Tab2FrameBlock.ScrollFrame:SetClipsChildren(true)
 	Tab2FrameBlock.ScrollFrame:SetAllPoints(Tab2FrameBlock);
 	
 	M.UpdateBlockButtons()
-		
+
 	------------------
 	-- TAB 3 FRAMES --
 	------------------	
@@ -1737,6 +1770,7 @@ local function CreateUIFrames()
 	Tab3Frame.ScrollBar:SetPoint("BOTTOM", Tab3Frame.ScrollDown, "TOP", 0, 2);
  
 	Tab3Frame.ScrollFrame:SetScrollChild(Tab3Frame.Slate);	
+	Tab3Frame.ScrollFrame:SetClipsChildren(true);
 	Tab3Frame.ScrollFrame:SetAllPoints(Tab3Frame);
  
 	-- Plot options on our scrolling slate
@@ -1799,7 +1833,7 @@ local function CreateUIFrames()
 	 _G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.showWarning == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.showWarning = (self:GetChecked() or false) end) 
-	
+
 	Button = CreateFrame("CheckButton", "GILFrame3IgnoreResponse", Tab3Frame.Slate, "UICheckButtonTemplate")	
 	Button:SetPoint("TOPLEFT", GILFrame3SyncWarning, "BOTTOMLEFT", 0, 4)
 	_G[Button:GetName().."Text"]:SetText(L["OPT_24"])
@@ -1810,7 +1844,7 @@ local function CreateUIFrames()
 	Button = Tab3Frame.Slate:CreateFontString("GILFrame3ExpText", "OVERLAY", "GameFontHighlight")
 	Button:SetPoint("TOPLEFT", GILFrame3IgnoreResponse, "BOTTOMLEFT", 6, -4)
 	Button:SetText(L["OPT_5"])
-	
+
 	Button = CreateFrame("EditBox", "GILFrame3Exp", Tab3Frame.Slate, "InputBoxTemplate")
 	Button:SetPoint("TOPLEFT", GILFrame3ExpText, "TOPRIGHT", 6, 4)
 	Button:SetWidth(50)
@@ -1932,7 +1966,7 @@ local function CreateUIFrames()
 	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.useLFGHacks == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useLFGHacks = (self:GetChecked() or false) end) 
-		
+	
 	-- Strata dropdown
 	
 	Button = Tab3Frame.Slate:CreateFontString("GILFrame3StrataText", "OVERLAY", "GameFontHighlight")
@@ -2028,13 +2062,13 @@ end
 -- CORE UI GLOBALS --
 ---------------------
 
-function M.GILUpdateBlockHistory(filterNumber)
+function M.GILUpdateBlockHistory (filterNumber)
 	if MainFrame ~= nil and Tab2FrameBlock:IsVisible() and Tab2BlockFilter == filterNumber then
 		M.UpdateBlockButtons()
 	end
 end
 
-function M.GILUpdateChatCount(filterNumber)
+function M.GILUpdateChatCount (filterNumber)
 	if MainFrame ~= nil and Tab2Frame:IsVisible() then	
 		M.FilterListDrawUpdate(FilterScrollFrame)
 	end
