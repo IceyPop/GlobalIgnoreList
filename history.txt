@@ -2,7 +2,7 @@
 
 => 11.2.7
 
-Added filter blocking history which can be accessed by right clicking a chat filter or by a new button in the UI, shout out to Roadblock for feedback on my alpha implementation, and for helping with some of the code around history pruning.
+Added filter blocking history which can be accessed by right clicking a chat filter or by a new button in the UI, shout out to Roadblock for feedback on my alpha implementation, and for helping with some of the code around history pruning/viewing.
 
 Right clicking while viewing blocked filter data can be used to ignore the sender, reset stats, and other functions
 
