@@ -1232,8 +1232,13 @@ local function CreateUIFrames()
 	icon:SetPoint("TOPLEFT", -5, 7)
 	icon:SetTexture("Interface\\FriendsFrame\\Battlenet-Portrait")
 	
-	local Tab1Button = CreateFrame("Button", "GILTab1", MainFrame, C_EditMode and "CharacterFrameTabTemplate" or "CharacterFrameTabButtonTemplate")
-
+	local tabTemplate = "CharacterFrameTabButtonTemplate"
+	
+	if V.wowIsRetail == true then
+		tabTemplate = "CharacterFrameTabTemplate"
+	end
+		
+	local Tab1Button = CreateFrame("Button", "GILTab1", MainFrame, tabTemplate)
 	
 	Tab1Button:SetPoint("TOPLEFT", MainFrame, "BOTTOMLEFT", 20, 1)
 	Tab1Button:SetText(L["TAB_1"])
@@ -1249,7 +1254,7 @@ local function CreateUIFrames()
 			PanelTemplates_SetTab(MainFrame, 1)
 		end)
 
-	local Tab2Button = CreateFrame("Button", "GILTab2", MainFrame, C_EditMode and "CharacterFrameTabTemplate" or "CharacterFrameTabButtonTemplate")
+	local Tab2Button = CreateFrame("Button", "GILTab2", MainFrame, tabTemplate)
 
 	Tab2Button:SetPoint("LEFT", "GILTab1", "RIGHT", -16, 0)
 	Tab2Button:SetText(L["TAB_2"])
@@ -1265,7 +1270,7 @@ local function CreateUIFrames()
 			PanelTemplates_SetTab(MainFrame, 2)
 		end)
 		
-	local Tab3Button = CreateFrame("Button", "GILTab3", MainFrame, C_EditMode and "CharacterFrameTabTemplate" or "CharacterFrameTabButtonTemplate")	
+	local Tab3Button = CreateFrame("Button", "GILTab3", MainFrame, tabTemplate)
 	
 	Tab3Button:SetPoint("LEFT", "GILTab2", "RIGHT", -16, 0)
 	Tab3Button:SetText(L["TAB_3"])
@@ -1978,13 +1983,38 @@ local function CreateUIFrames()
 	Drop:SetPoint("TOPLEFT", GILFrame3StrataText, "TOPRIGHT", 0, 6)
 	Drop:SetWidth(100)
 
-	Drop:SetupMenu(function(self, root)
-		root:CreateButton("LOW", function() GlobalIgnoreDB.frameStrata = 0 self:SetDefaultText(getFrameStrata()) end)
-		root:CreateButton("MEDIUM", function() GlobalIgnoreDB.frameStrata = 1 self:SetDefaultText(getFrameStrata()) end)
-		root:CreateButton("HIGH", function() GlobalIgnoreDB.frameStrata = 2 self:SetDefaultText(getFrameStrata()) end)
-		root:CreateButton("DIALOG", function() GlobalIgnoreDB.frameStrata = 3 self:SetDefaultText(getFrameStrata()) end)
-		
-	end)
+	Drop:SetupMenu(
+		function(self, root)
+			root:CreateButton("LOW",
+				function()
+					GlobalIgnoreDB.frameStrata = 0
+					self:SetDefaultText(getFrameStrata())
+					MainFrame:SetFrameStrata(getFrameStrata())
+				end
+			)
+			root:CreateButton("MEDIUM",
+				function()
+					GlobalIgnoreDB.frameStrata = 1
+					self:SetDefaultText(getFrameStrata())
+					MainFrame:SetFrameStrata(getFrameStrata())
+				end
+			)
+			root:CreateButton("HIGH",
+				function()
+					GlobalIgnoreDB.frameStrata = 2
+					self:SetDefaultText(getFrameStrata())
+					MainFrame:SetFrameStrata(getFrameStrata())
+				end
+			)
+			root:CreateButton("DIALOG",
+				function()
+					GlobalIgnoreDB.frameStrata = 3
+					self:SetDefaultText(getFrameStrata())
+					MainFrame:SetFrameStrata(getFrameStrata())
+				end
+			)
+		end
+	)
 
 	----------
 	-- SHOW --

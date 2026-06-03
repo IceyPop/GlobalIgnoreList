@@ -1,10 +1,26 @@
 => VERSION HISTORY
 
+=> 12.0.0
+
+Updated for Midnight expansion pre-patch
+
+Fixed a bug where the "GIL UI display priority" wasn't updated immediately when changed.  Instead it had to be set and would only take effect when the addon was reloaded or the player logged in the next time.
+
+=> 11.2.7.1
+
+Updated for Burning Crusade Anniversary
+
 => 11.2.7
 
-Added filter blocking history which can be accessed by right clicking a chat filter or by a new button in the UI, shout out to Roadblock for feedback on my alpha implementation, and for helping with some of the code around history pruning/viewing.
+Updated for latest retail and era versions
 
-Right clicking while viewing blocked filter data can be used to ignore the sender, reset stats, and other functions
+Added filter blocking history which can be accessed by right clicking a chat filter or by a new button in the UI, shout out to Roadblock for suggestions and helping with some of the code around history pruning.
+
+Right clicking while viewing blocked filter data can be used to ignore the sender, and other functions
+
+Probably a few other changes I cannot remember as I was pulled away from WoW for a little over a month unexpectedly in the middle of working on this release.
+
+=> 11.2.5.1
 
 Updated default Mystic+ filter
 
@@ -12,9 +28,9 @@ Moved "Send ignore response to ignored players" option under Ignore List Options
 
 Creating a new chat filter will now create the filter turned off by default
 
-Global Ignore will now show up under the "Chat & Communications" category in the addon listing in WoW
+When viewing chat filters, right clicking on a filter will now bring up a menu with filter options similar to the ignore list UI.  This right click menu can be used to edit, remove, reset stats or view block history
 
-Updated for latest retail, classic, and era versions
+New button in chat filters tab to view block history of the selected filter.
 
 => 11.2.5.0
 
