@@ -425,7 +425,7 @@ function M.removeServer (name, strict)
 		return nil
 	end
 
-	result = name
+	local result = name
 	
 	local index = string.find(name, "-", 1, true)
 	

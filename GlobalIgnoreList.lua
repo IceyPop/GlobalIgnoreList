@@ -1075,7 +1075,7 @@ local function ApplicationStartup(self)
 		
 		local count = 1
 		
-		while (count < #GlobalIgnoreDB.filterID) do
+		while (count <= #GlobalIgnoreDB.filterID) do
 			if (isDefFilterID(GlobalIgnoreDB.filterID[count]) == 0) then
 				M.ShowMsg (format(L["SYNC_4"], GlobalIgnoreDB.filterDesc[count]))
 				M.RemoveChatFilter(count)
@@ -2628,6 +2628,7 @@ C_FriendList.AddOrDelIgnore = function(name)
 			
 				for c = 1, _G[frameName].historyBuffer:GetNumElements() do
 					msg = _G[frameName].historyBuffer:GetEntryAtIndex(_G[frameName].historyBuffer:GetNumElements() - c + 1).message
+					if issecretvalue and issecretvalue(msg) then msg = "" end -- 12.0 secret chat text: string ops would error, skip entry
 					pos = find(msg, "|Hplayer:", 1, true)
 					--t = string.gsub(msg, "|", "!")
 				
