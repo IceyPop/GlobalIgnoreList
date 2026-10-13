@@ -1,5 +1,9 @@
 => VERSION HISTORY
 
+=> 12.0.0-20261013
+
+Updated TOC to be native to Midnight 12.1.5 (Contribution by JPEscher@Github/Noctusmirus-Proudmoore(US))
+
 => 12.0.0
 
 Updated for Midnight expansion pre-patch
