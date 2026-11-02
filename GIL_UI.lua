@@ -46,8 +46,8 @@ local COL_NAME				= 130
 local COL_SERVER			= 150
 local COL_TYPE				= 60
 local COL_LISTED			= 53
-local COL_EXPIRE			= 56
-local COL_NOTES				= 241
+local COL_EXPIRE			= 60
+local COL_NOTES				= 237
 local COL_DESC				= 210
 local COL_STATE				= 26
 local COL_FILTER			= 368
@@ -2042,7 +2042,11 @@ local function friendsShow()
 	
 	if MainFrame ~= nil then
 		MainFrame:ClearAllPoints()
-		MainFrame:SetPoint("TOPLEFT", FriendsFrame, "TOPRIGHT", 12, -10)		
+		if (V.wowIsRetail) then
+			MainFrame:SetPoint("TOPLEFT", SocialUIFrame, "TOPRIGHT", 50, -10)
+		else
+			MainFrame:SetPoint("TOPLEFT", FriendsFrame, "TOPRIGHT", 12, -10)
+		end
 		MainFrame:Show()
 	end
 end
@@ -2057,8 +2061,13 @@ local function friendsHide()
 	end
 end
 
-FriendsFrame:HookScript("OnShow", friendsShow)
-FriendsFrame:HookScript("OnHide", friendsHide)
+if (V.wowIsRetail) then
+	SocialUIFrame:HookScript("OnShow", friendsShow)
+	SocialUIFrame:HookScript("OnHide", friendsHide)
+else
+	FriendsFrame:HookScript("OnShow", friendsShow)
+	FriendsFrame:HookScript("OnHide", friendsHide)
+end
 
 --------------------------
 -- HOOK INTO CHAT LINKS --

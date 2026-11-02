@@ -467,6 +467,7 @@ V.wowIsWrath		= false
 V.wowIsCata			= false
 V.wowIsMOP			= false
 V.wowIsRetail		= false
+V.wowIsForever		= false
 V.wowLongName		= "Unknown"
 V.wowName			= V.wowLongName
 
@@ -480,10 +481,14 @@ V.wowName			= V.wowLongName
 
 local toc, toc, toc, toc = GetBuildInfo()
 
-if (toc >= 10000 and toc <= 19999) then
-	V.wowIsERA	= true
+if (toc >= 10000 and toc <= 15999) then
+	V.wowIsERA		= true
 	V.wowLongName	= "Classic Era"
 	V.wowName		= "Era"
+elseif (toc >= 16000 and toc <= 19999) then
+	V.wowIsForever	= true
+	V.wowLongName	= "Forever"
+	V.wowName		= "WOWF"
 elseif (toc >= 20000 and toc <= 29999) then
 	V.wowIsTBC	= true
 	V.wowLongName	= "The Burning Crusade"
@@ -515,4 +520,4 @@ elseif (toc >= 120000 and toc < 129999) then
 	V.wowName		= "MN"
 end
 
-V.wowIsClassic = (V.wowIsRetail == false)
+V.wowIsClassic = (V.wowIsRetail == false and V.wowIsForever == false)
