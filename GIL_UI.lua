@@ -2061,13 +2061,13 @@ local function friendsHide()
 	end
 end
 
-if (V.wowIsRetail) then
-	SocialUIFrame:HookScript("OnShow", friendsShow)
-	SocialUIFrame:HookScript("OnHide", friendsHide)
-else
+--if (V.wowIsRetail) then
+--	SocialUIFrame:HookScript("OnShow", friendsShow)
+--	SocialUIFrame:HookScript("OnHide", friendsHide)
+--else
 	FriendsFrame:HookScript("OnShow", friendsShow)
 	FriendsFrame:HookScript("OnHide", friendsHide)
-end
+--end
 
 --------------------------
 -- HOOK INTO CHAT LINKS --

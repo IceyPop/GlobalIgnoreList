@@ -1,5 +1,9 @@
 => VERSION HISTORY
 
+=> 12.1.7.1
+
+Removed UI changes from 12.1.7 that aren't compatible with 12.1.5
+
 => 12.1.7
 
 Updated for latest Midnight patch
