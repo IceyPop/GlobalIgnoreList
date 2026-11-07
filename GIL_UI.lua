@@ -2,16 +2,29 @@
 -- GLOBAL IGNORE LIST USER INTERFACE --
 ---------------------------------------
 
--- first : X... - is move left
--- second: Y... - is move down
+-- first : X... - is move left  second: Y... - is move down
 
 local addonName, addon 	= ...
 local L = addon.L -- localization entries
 local V = addon.V -- shared variables
 local M = addon.M -- shared methods
 
-V.needSorted					= true
-V.nameUI							= ""
+V.needSorted	= true
+V.nameUI		= ""
+
+---------------
+-- GLOBAL UI --
+---------------
+
+local function SetFrameTitle (frame, text)
+	if frame.SetTitle then
+		frame:SetTitle(text)
+	elseif frame.TitleContainer and frame.TitleContainer.TitleText then
+		frame.TitleContainer.TitleText:SetText(text)
+	elseif _G[frame:GetName() .. "TitleText"] then
+		_G[frame:GetName() .. "TitleText"]:SetText(text)
+	end
+end
 
 local MainFrame				= nil
 local Tab1Frame				= nil
@@ -312,13 +325,13 @@ local function CreateFilterButtons()
 	FilterScrollButtons = {}
 	
 	for count = 1, BUTTON_TOTAL do
-	
+
 		if V.wowIsClassic == true then
 			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
 		else
 			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "IgnoreListButtonTemplate")
 		end
-	
+
 		if count == 1 then
 			FilterScrollButtons[count]:SetPoint("TOPLEFT", FilterScrollFrame, -1, 0)
 		else
@@ -1089,12 +1102,15 @@ local function createColumn (text, width, parent)
 	end
 	
 	columnCount = columnCount + 1
-	
-	local Header = CreateFrame("Button", parent:GetName() .. "Header" .. columnCount, parent, "WhoFrameColumnHeaderTemplate")
+		
+	local Header = CreateFrame("Button", parent:GetName() .. "Header" .. columnCount, parent, "ColumnDisplayButtonTemplate")
 	Header:SetWidth(width)
-	_G[parent:GetName().."Header"..columnCount.."Middle"]:SetWidth(width - 9)
 	Header:SetText(text)
-	Header:SetNormalFontObject("GameFontHighlight")
+	
+	if Header.Text then
+		Header.Text:SetFontObject("GameFontHighlight")
+	end
+	
 	Header:SetID(columnCount)
 	
 	if columnCount == 1 then	
@@ -1105,6 +1121,8 @@ local function createColumn (text, width, parent)
 	
 	Header:SetScript("OnClick", columnClick)
 end
+
+
 
 --------------------
 -- LINK CONVERTER --
@@ -1201,9 +1219,7 @@ local function CreateUIFrames()
 	MainFrame:EnableMouse(true)
 	MainFrame:RegisterForDrag("LeftButton", "RightButton")
 	MainFrame:SetClampedToScreen(true)
-	
-	MainFrame.title = _G["GILTitleText"]
-	MainFrame.title:SetText("Global Ignore List")
+	SetFrameTitle(MainFrame, "Global Ignore List")
 	
 	MainFrame:SetScript("OnMouseDown",
 		function(self)
@@ -1231,11 +1247,11 @@ local function CreateUIFrames()
 	icon:SetSize(60, 60)
 	icon:SetPoint("TOPLEFT", -5, 7)
 	icon:SetTexture("Interface\\FriendsFrame\\Battlenet-Portrait")
-	
-	local tabTemplate = "CharacterFrameTabButtonTemplate"
-	
-	if V.wowIsRetail == true then
-		tabTemplate = "CharacterFrameTabTemplate"
+
+	local tabTemplate = "PanelTabButtonTemplate"
+
+	if V.wowIsClassic == true then
+		tabTemplate = "CharacterFrameTabButtonTemplate"
 	end
 		
 	local Tab1Button = CreateFrame("Button", "GILTab1", MainFrame, tabTemplate)
@@ -2042,11 +2058,15 @@ local function friendsShow()
 	
 	if MainFrame ~= nil then
 		MainFrame:ClearAllPoints()
-		if (V.wowIsRetail) then
-			MainFrame:SetPoint("TOPLEFT", SocialUIFrame, "TOPRIGHT", 50, -10)
+
+		if _G.SocialUIFrame then
+			MainFrame:SetPoint("TOPLEFT", _G.SocialUIFrame, "TOPRIGHT", 50, -10)
+		elseif _G.FriendsFrame then
+			MainFrame:SetPoint("TOPLEFT", _G.FriendsFrame, "TOPRIGHT", 12, -10)
 		else
-			MainFrame:SetPoint("TOPLEFT", FriendsFrame, "TOPRIGHT", 12, -10)
+			MainFrame:SetPoint("CENTER", UIParent)
 		end
+
 		MainFrame:Show()
 	end
 end
@@ -2061,13 +2081,17 @@ local function friendsHide()
 	end
 end
 
---if (V.wowIsRetail) then
---	SocialUIFrame:HookScript("OnShow", friendsShow)
---	SocialUIFrame:HookScript("OnHide", friendsHide)
---else
-	FriendsFrame:HookScript("OnShow", friendsShow)
-	FriendsFrame:HookScript("OnHide", friendsHide)
---end
+----------
+-- MAIN --
+----------
+
+if _G.SocialUIFrame then
+	_G.SocialUIFrame:HookScript("OnShow", friendsShow)
+	_G.SocialUIFrame:HookScript("OnHide", friendsHide)
+elseif _G.FriendsFrame then
+	_G.FriendsFrame:HookScript("OnShow", friendsShow)
+	_G.FriendsFrame:HookScript("OnHide", friendsHide)
+end
 
 --------------------------
 -- HOOK INTO CHAT LINKS --

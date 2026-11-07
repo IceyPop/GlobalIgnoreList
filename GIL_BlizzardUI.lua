@@ -35,7 +35,8 @@ end
 function M.GIL_LFG_Refresh()
 	if V.wowIsERA == true or V.wowIsTBC == true then return end
 
-	if LFGListFrame.SearchPanel ~= nil and LFGListFrame.SearchPanel:IsShown() then
+	if LFGListFrame and LFGListFrame.SearchPanel ~= nil and LFGListFrame.SearchPanel:IsShown()
+		and type(LFGListSearchPanel_UpdateResults) == "function" then
 		LFGListSearchPanel_UpdateResults(LFGListFrame.SearchPanel)
 	end
 end
@@ -137,7 +138,7 @@ end
 -- ADDON COMPARTMENT --
 -----------------------
 
-if V.wowIsRetail == true then
+if (V.wowIsRetail == true or V.wowIsForever == true) and AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
 	AddonCompartmentFrame:RegisterAddon({
 		text = "Global Ignore List",
 		icon = "Interface\\Icons\\ui_chat.blp",
@@ -154,14 +155,13 @@ end
 
 function M.GIL_HookFunctions()
 	-- /script Menu.PrintOpenMenuTags()
-	
+
 	if GlobalIgnoreDB.useLFGHacks == true and (V.wowIsMOP or V.wowIsRetail) then
 		hooksecurefunc("LFGListSearchEntry_Update", M.GIL_LFG_Update)
 		hooksecurefunc("LFGListSearchEntry_OnEnter", M.GIL_LFG_Tooltip)
-		
 		Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_ENTRY", M.GIL_LFG_ApplicantMenu)
 	end
-	
+
 	if GlobalIgnoreDB.useUnitHacks == true then
 		Menu.ModifyMenu("MENU_UNIT_ENEMY_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PLAYER", M.GIL_UnitMenuPlayer)
