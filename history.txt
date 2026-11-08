@@ -1,8 +1,22 @@
 => VERSION HISTORY
 
+=> 12.1.7.3
+
+Major update adds support for Wow Forever.
+
+Made some UI changes specifically when playing Forever to hide the display of servers and give more room for the second name and notes.  When reviewing blocked chat history in Forever it will also hide the server name to provide more room for longer names.
+
+"Same server" to Blizzard ignore moves are automatically disabled regardless of settings in Forever
+
+Added a new mini-map icon which can be clicked to open the GUI or shift clicked to add current target to ignore list.  This was added due to the unit menus causing some issues in Forever, so this can be used as a replacement way to ignore your current target. This can be toggled off or on using /gi minimap and will be added to the options tab in the GUI later.
+
+When opening the GUI using the mini map or by command line /gi gui, the window position is now saved between sessions.
+
+Added the ability to click on the bottom right corner of the GUI and drag the window to scale its size smaller and larger.  Double clicking the corner will reset it to default scale.
+
 => 12.1.7.2
 
-Bugfixes
+Bugfixes for 12.1.5 and 12.1.7 retail, stabilizing before adding Forever support
 
 => 12.1.7.1
 

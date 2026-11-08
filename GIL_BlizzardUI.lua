@@ -108,23 +108,23 @@ end
 ----------------------
 
 function M.GIL_UnitMenuPlayer (owner, root, contextData)
-	local target, server = UnitName(contextData.unit)
+	if not contextData or not contextData.unit then return end
 
-	if server == nil or server == "" then
-		target = M.addServer(target)
-	else
-		target = target .. "-" .. server
-	end
+	local unit = contextData.unit
+	if not UnitExists(unit) or not UnitIsPlayer(unit) then return end
 
-	target = M.Proper(target, true)
+	local target = M.GetUnitFullName(unit)
+	if not target then return end
+
+	target = M.Proper(M.addServer(target), true)
 
 	local text = ""
-	
+
 	if (M.hasGlobalIgnored(M.addServer(target)) > 0) then
-		text = L["RCM_4"]				
+		text = L["RCM_4"]
 	else
 		text = L["RCM_6"]
-	end	
+	end
 
 	root:CreateDivider()
 	root:CreateButton(text,
@@ -138,15 +138,8 @@ end
 -- ADDON COMPARTMENT --
 -----------------------
 
-if (V.wowIsRetail == true or V.wowIsForever == true) and AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
-	AddonCompartmentFrame:RegisterAddon({
-		text = "Global Ignore List",
-		icon = "Interface\\Icons\\ui_chat.blp",
-		notCheckable = true,
-		func = function(button, menuInputData, menu)
-			M.GIL_GUI()
-		end,
-	})
+function GIL_CompartmentFunction()
+	M.GIL_GUI()
 end
 
 --------------
@@ -155,14 +148,24 @@ end
 
 function M.GIL_HookFunctions()
 	-- /script Menu.PrintOpenMenuTags()
-
+	
+	local hasMenu = Menu ~= nil and Menu.ModifyMenu ~= nil
+	
 	if GlobalIgnoreDB.useLFGHacks == true and (V.wowIsMOP or V.wowIsRetail) then
-		hooksecurefunc("LFGListSearchEntry_Update", M.GIL_LFG_Update)
-		hooksecurefunc("LFGListSearchEntry_OnEnter", M.GIL_LFG_Tooltip)
-		Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_ENTRY", M.GIL_LFG_ApplicantMenu)
+		if type(LFGListSearchEntry_Update) == "function" then
+			hooksecurefunc("LFGListSearchEntry_Update", M.GIL_LFG_Update)
+		end
+		
+		if type(LFGListSearchEntry_OnEnter) == "function" then
+			hooksecurefunc("LFGListSearchEntry_OnEnter", M.GIL_LFG_Tooltip)
+		end
+		
+		if hasMenu then
+			Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_ENTRY", M.GIL_LFG_ApplicantMenu)
+		end
 	end
-
-	if GlobalIgnoreDB.useUnitHacks == true then
+	
+	if GlobalIgnoreDB.useUnitHacks == true and hasMenu and V.wowIsForever == false then
 		Menu.ModifyMenu("MENU_UNIT_ENEMY_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PARTY", M.GIL_UnitMenuPlayer)

@@ -1,6 +1,7 @@
 ----------------------------------
 -- Global Ignore List Variables --
 ----------------------------------
+
 local addonName, addon 	= ...
 local L = addon.L -- localization entries
 local V = addon.V -- shared variables
@@ -698,7 +699,7 @@ function M.SyncIgnoreList (silent)
 					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
 
 					if ok then
-						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false)
+						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false or V.isWowForever == true)
 					end
 					
 					if ok then
@@ -954,6 +955,14 @@ local function ApplicationStartup(self)
 		GlobalIgnoreDB.useLFGHacks = true
 	end
 	
+	if GlobalIgnoreDB.minimapAngle == nil then
+		GlobalIgnoreDB.minimapAngle = 215
+	end
+	
+	if GlobalIgnoreDB.minimapHide == nil then
+		GlobalIgnoreDB.minimapHide = false
+	end
+	
 	if GlobalIgnoreDB.ignoreResponse == nil then
 		GlobalIgnoreDB.ignoreResponse = true
 	end
@@ -1041,6 +1050,8 @@ local function ApplicationStartup(self)
 	
 	M.GIL_HookFunctions()
 	
+	if M.GIL_CreateMinimapButton then M.GIL_CreateMinimapButton() end
+	
 	self:UnregisterEvent("IGNORELIST_UPDATE")
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 	self:UnregisterEvent("ADDON_LOADED")
@@ -1122,7 +1133,7 @@ local function EventHandler (self, event, sender, ...)
 			local doWarn  = false
 			
 			for count = 1, GetNumGroupMembers() do	
-				name = GetUnitName(prefix..count, true)
+				name = (V.wowIsForever == true) and M.GetUnitFullName(prefix..count) or GetUnitName(prefix..count, true)
 			
 				if name then
 					name = M.Proper(M.addServer(name))
@@ -1143,7 +1154,7 @@ local function EventHandler (self, event, sender, ...)
 				
 				M.ShowMsg(format(L["CHAT_1"], #groupWarning, nameList))
 
-				StaticPopup_Show("GIL_PARTYWARN", #groupWarning, nameList)
+				M.GIL_ShowDialog({ key = "partywarn", text = L["BOX_8"], button1 = L["BOX_6"], timeout = 15 }, #groupWarning, nameList)
 			end
 		end		
 	end
@@ -2139,14 +2150,10 @@ local function GILTest()
 end
 
 function M.ignoreFromCmd (argStr)
-	argStr = (M.trim(M.Proper(argStr)) or "")
+	argStr = (M.trim((V.wowIsForever == true) and argStr or M.Proper(argStr)) or "")
 	local server
 	if argStr == "" then
-		argStr, server =  UnitName("target")
-					
-		if server ~= nil then
-			argStr = argStr .. "-"..server
-		end
+		argStr = M.GetUnitFullName("target")
 			
 		if argStr == nil or not UnitPlayerControlled("target") then
 			argStr = ""
@@ -2154,7 +2161,7 @@ function M.ignoreFromCmd (argStr)
 	end
 		
 	if argStr ~= "" then
-		C_FriendList.AddIgnore (M.Proper(argStr))
+		C_FriendList.AddIgnore((V.wowIsForever == true) and argStr or M.Proper(argStr))
 	end
 end
 
@@ -2237,6 +2244,10 @@ function SlashCmdList.GIGNORE (msg)
 		GlobalIgnoreDB.sameserver = false
 		M.ShowMsg(L["CMD_11"])
 		
+	elseif args[1] == "minimap" then
+	
+		M.GIL_ToggleMinimapButton()
+		
 	elseif args[1] == "list" then
 	
 		ShowIgnoreList(argStr)
@@ -2256,7 +2267,7 @@ function SlashCmdList.GIGNORE (msg)
 				RemoveFromList(tonumber(argStr))
 				M.GILUpdateUI(true)
 			else
-				C_FriendList.DelIgnore(args[2], true)
+				C_FriendList.DelIgnore((V.wowIsForever == true) and argStr or args[2], true)
 			end
 		else
 			argStr = M.Proper(argStr, true)
@@ -2268,7 +2279,7 @@ function SlashCmdList.GIGNORE (msg)
 				RemoveFromList(npcIndex)
 				M.GILUpdateUI(true)
 			else	
-				C_FriendList.DelIgnore (args[2], true)
+				C_FriendList.DelIgnore((V.wowIsForever == true) and argStr or args[2], true)
 			end
 		end
 		
@@ -2372,29 +2383,6 @@ BlizzardDelIgnore			= C_FriendList.DelIgnore
 BlizzardDelIgnoreByIndex	= C_FriendList.DelIgnoreByIndex
 BlizzardAddOrDelIgnore		= C_FriendList.AddOrDelIgnore
 
-StaticPopupDialogs["GIL_PARTYCONFIRM"] = {
-
-	preferredIndex	= STATICPOPUPS_NUMDIALOGS,
-	text			= L["BOX_7"],
-	button1			= L["BOX_6"],
-	button2			= L["BOX_5"],
-	OnAccept		= 	function()
-							BlizzardInviteUnit(partyNameUI)							
-						end,
-	whileDead		= true,
-	hideOnEscape	= true,
-}
-
-StaticPopupDialogs["GIL_PARTYWARN"] = {
-
-	preferredIndex	= STATICPOPUPS_NUMDIALOGS,
-	text			= L["BOX_8"],
-	button1			= L["BOX_6"],
-	timeout         = 15,
-	whileDead		= true,
-	hideOnEscape	= true,
-}
-
 C_PartyInfo.InviteUnit = function (name)
 
 	name = M.Proper(name)
@@ -2402,10 +2390,81 @@ C_PartyInfo.InviteUnit = function (name)
 	if M.hasGlobalIgnored(M.addServer(name)) > 0 then
 		partyNameUI = name
 		
-		StaticPopup_Show("GIL_PARTYCONFIRM", partyNameUI)
+		M.GIL_ShowDialog({
+			key      = "partyconfirm",
+			text     = L["BOX_7"],
+			button1  = L["BOX_6"],
+			button2  = L["BOX_5"],
+			onAccept = function() BlizzardInviteUnit(partyNameUI) end,
+		}, partyNameUI)
 	else
 		BlizzardInviteUnit(name)
 	end
+end
+
+-- returns name (with server), note, days
+local function GILParseIgnoreArg(name)
+
+	local note = ""
+	local days = GlobalIgnoreDB.defexpire
+	local find = string.find
+	local sub  = string.sub
+
+	if V.wowIsForever == true then
+		name = M.trim(name) or ""
+		
+		local dash = find(name, "-", 1, true)
+		
+		if dash then
+			local base  = M.trim(sub(name, 1, dash - 1)) or ""
+			local rest  = sub(name, dash + 1)
+			local space = find(rest, " ", 1, true)
+			local server = rest
+			
+			if space then
+				server = sub(rest, 1, space - 1)
+				note   = M.trim(sub(rest, space + 1)) or ""
+			end
+			
+			if server == "" then server = FOREVER_SERVER end
+			name = base .. "-" .. server
+		end
+	else
+		local space = find(name, " ")
+		
+		if space then
+			note = sub(name, space + 1)
+			name = sub(name, 0, space - 1)
+			
+			space = find(note, " ")
+			
+			if space then
+				if tonumber(sub(note, 0, space - 1)) then
+					days = tonumber(sub(note, 0, space - 1))
+					note = sub(note, space + 1)
+				end
+			else
+				if tonumber(note) then
+					days = tonumber(note)
+					note = ""
+				end
+			end
+		end
+	end
+	
+	if V.wowIsForever == true and note ~= "" then
+		local first, rest = string.match(note, "^(%S+)%s+(.*)$")
+		
+		if first and tonumber(first) then
+			days = tonumber(first)
+			note = rest
+		elseif tonumber(note) then
+			days = tonumber(note)
+			note = ""
+		end
+	end
+	
+	return name, note, days
 end
 
 C_FriendList.AddIgnore = function(name, noNote)
@@ -2416,51 +2475,30 @@ C_FriendList.AddIgnore = function(name, noNote)
 		okDisplay = false
 	end
 
-	--print("DEBUG: Info sent to C_FriendList.AddIgnore name="..(name or "nil") .. " note="..(noNote or "nil"))
 	local server
 	if (not name or name == "") then
 
-		name, server = UnitName("target")
-					
-		if server ~= nil then
-			name = name .. "-"..server
-		end
+		name = M.GetUnitFullName("target") or ""
 	end
 	
 	if (not name or name == "") then
 		return
 	end
 
-	local note  = ""
-	local space = string.find(name, " ")
-	local days  = GlobalIgnoreDB.defexpire
-	
-	if space then
-		note = string.sub(name, space + 1)
-		name = string.sub(name, 0, space - 1)
-		
-		space = string.find(note, " ")
-		
-		if space then
-			if tonumber(string.sub(note, 0, space - 1)) then
-				days = tonumber(string.sub(note, 0, space - 1))
-				note = string.sub(note, space + 1)
-			end
-		else
-			if tonumber(note) then
-				days = tonumber(note)
-				note = ""
-			end
-		end
-	end
+	local note, days
+	name, note, days = GILParseIgnoreArg(name)
 	
 	V.needSorted = true
-	name	   = M.Proper(M.addServer(name))
+	name = M.Proper(M.addServer(name), V.wowIsForever == true)
+	
+	if not name then return end
 	
 	local tmp = M.removeServer(name, true)
 	if (tmp == "") or (tmp == _G.UNKNOWN) then return end
+	
+	local playerName = M.GetUnitFullName("player") or UnitName("player")
 		
-	if M.Proper(M.addServer(UnitName("player"))) ~= name then
+	if M.Proper(M.addServer(playerName), V.wowIsForever == true) ~= name then
 	
 		local index = M.hasGlobalIgnored(name)
 	
@@ -2470,29 +2508,21 @@ C_FriendList.AddIgnore = function(name, noNote)
 			if GlobalIgnoreDB.asknote == true and not noNote then
 			
 				V.nameUI = name
-				StaticPopup_Show("GIL_REASON", V.nameUI)
+				M.GIL_ShowReason(V.nameUI)
 			end
 
 			if okDisplay == true then 
-				M.ShowMsg(format(L["ADD_2"], name))
-			end
-			
-			if C_FriendList.GetNumIgnores() < maxIgnoreSize then
-				BlizzardAddIgnore(M.removeServer(name))
+				M.ShowMsg(format(L["ADD_2"], M.removeServer(name)))
 			end
 		else
-			if hasIgnored(name) > 0 then
-				if okDisplay == true then
-					M.ShowMsg(format(L["ADD_1"], name))
-				end
-			end
-
-			if C_FriendList.GetNumIgnores() < maxIgnoreSize then			
-				BlizzardAddIgnore(M.removeServer(name))
+			if okDisplay == true and hasIgnored(name) > 0 then
+				M.ShowMsg(format(L["ADD_1"], M.removeServer(name)))
 			end
 		end
 		
-		--removeDeleted(name)
+		if C_FriendList.GetNumIgnores() < maxIgnoreSize then
+			BlizzardAddIgnore(M.removeServer(name))
+		end
 		
 		M.GILUpdateUI()
 	else
@@ -2552,13 +2582,13 @@ C_FriendList.DelIgnore = function(idxpos, isGIL)
 		local index = M.hasGlobalIgnored(name)
 
 		if index > 0 then
+			name = M.removeServer(name)
+		
 			if okDisplay == true then
 				M.ShowMsg(format(L["REM_1"], name))
 			end
 		
 			RemoveFromList(index)		
-		
-			name = M.removeServer(name)
 		
 			if hasIgnored(name) > 0 then
 				BlizzardDelIgnore(name)
@@ -2578,12 +2608,7 @@ C_FriendList.AddOrDelIgnore = function(name)
 	--print ("DEBUG C_FriendList.AddOrDel called with: "..(name or "nil"))
 	local server
 	if (not name or name == "") then
-
-		name, server = UnitName("target")
-					
-		if server ~= nil then
-			name = name .. "-"..server
-		end
+		name = M.GetUnitFullName("target") or ""
 	end
 	
 	local find = string.find
@@ -2602,7 +2627,7 @@ C_FriendList.AddOrDelIgnore = function(name)
 			local prefix = IsInRaid() and "raid" or "party"
 
 			for count = 1, GetNumGroupMembers() do	
-				tempName = GetUnitName(prefix..count, true)
+				tempName = (V.wowIsForever == true) and M.GetUnitFullName(prefix..count) or GetUnitName(prefix..count, true)
 			
 				if tempName then
 					if M.removeServer(tempName, true) == name then

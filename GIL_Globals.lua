@@ -1,55 +1,13 @@
 local addonName, addon = ...
--- get a reference to localization entries
-local L = addon.L
--- use this array to share variables between addon files
+local L = addon.L		-- get a reference to localization entries
 addon.V = {}
-local V = addon.V
--- use this to share methods between addon files
+local V = addon.V		-- use this array to share variables between addon files
 addon.M = {}
-local M = addon.M
+local M = addon.M		-- use this to share methods between addon files
 
 ----------------------
 -- SHARED FUNCTIONS --
 ----------------------
-
-function M.GILDUMP (o)
-	if type(o) == 'table' then
-		local s = '{ '
-		
-		for key, value in pairs(o) do
-			if type(key) ~= 'number' then
-				key = '"'..key..'"'
-			end
-			s = s .. '['..key..'] = ' .. M.GILDUMP(value) .. ','
-		end
-		
-		return s .. '} '
-	else
-		return tostring(o)
-	end
-end
-
-function M.GILDUMP2 (tbl, indent)
-	if not indent then
-		indent = 0
-	end
-
-	local formatting
-	
-	for key, value in pairs(tbl) do
-		formatting = string.rep("  ", indent) .. key .. ": "
-		if type(value) == "table" then
-			print(formatting)
-			M.GILDUMP2(value, indent + 1)
-		elseif type(value) == 'boolean' then
-			print(formatting .. tostring(value))
-		elseif type(value) == 'function' then
-			print(formatting .. "function")
-		else
-			print(formatting .. value)
-		end
-	end
-end
 
 function M.popWord (str, ch)
 
@@ -156,6 +114,10 @@ function M.Proper (name, okSpaces)
 	if name == nil then return nil end
 	if name == "" then return nil end
 	
+	if okSpaces == nil and V.wowIsForever == true then
+		okSpaces = true
+	end
+	
 	local len    = strlen(name)
 	local count  = 1
 	local res    = ""
@@ -231,7 +193,7 @@ function M.prettyServer (origName)
 	local name = origName
 
 	if name == "Aeriepeak" then name = "Aerie Peak"
-	elseif name == "Aggra(português)" then name = "Aggra (Português)"
+	elseif name == "Aggra(portuguÃªs)" then name = "Aggra (PortuguÃªs)"
 	elseif name == "Ahn'qiraj" then name = "Ahn'Qiraj"
 	elseif name == "Al'akir" then name = "Al'Akir"
 	elseif name == "Altarofstorms" then name = "Altar of Storms"
@@ -258,12 +220,12 @@ function M.prettyServer (origName)
 	elseif name == "Burningsteppes" then name = "Burning Steppes"
 	elseif name == "Cenarioncircle" then name = "Cenarion Circle"
 	elseif name == "Chamberofaspects" then name = "Chamber of Aspects"
-	elseif name == "Chantséternels" then name = "Chants éternels"
+	elseif name == "ChantsÃ©ternels" then name = "Chants Ã©ternels"
 	elseif name == "Chaosbolt" then name = "Chaos Bolt"
 	elseif name == "Chillwindpoint" then name = "Chillwind Point"
 	elseif name == "Chromie(ru)" then name = "Chromie (RU)"
 	elseif name == "Colinaspardas" then name = "Colinas Pardas"
-	elseif name == "Confrérieduthorium" then name = "Confrérie du Thorium"
+	elseif name == "ConfrÃ©rieduthorium" then name = "ConfrÃ©rie du Thorium"
 	elseif name == "Conseildesombres" then name = "Conseil des Ombres"
 	elseif name == "Crusaderstrike" then name = "Crusader Strike"
 	elseif name == "Crystalpinestinger" then name = "Crystalpine Stinger"
@@ -298,7 +260,7 @@ function M.prettyServer (origName)
 	elseif name == "Eldre'thalas" then name = "Eldre'Thalas"
 	elseif name == "Emeralddream" then name = "Emerald Dream"
 	elseif name == "Fengus'ferocity" then name = "Fengus' Ferocity"
-	elseif name == "Festungderstürme" then name = "Festung der Stürme"
+	elseif name == "FestungderstÃ¼rme" then name = "Festung der StÃ¼rme"
 	elseif name == "Flamegor(ru)" then name = "Flamegor (RU)"
 	elseif name == "Grimbatol" then name = "Grim Batol"
 	elseif name == "Grizzlyhills" then name = "Grizzly Hills"
@@ -312,7 +274,7 @@ function M.prettyServer (origName)
 	elseif name == "Krolblade" then name = "Krol Blade"
 	elseif name == "Kultiras" then name = "Kul Tiras"
 	elseif name == "Kultderverdammten" then name = "Kult der Verdammten"
-	elseif name == "Lacroisadeécarlate" then name = "La Croisade écarlate"
+	elseif name == "LacroisadeÃ©carlate" then name = "La Croisade Ã©carlate"
 	elseif name == "Laughingskull" then name = "Laughing Skull"
 	elseif name == "Lavalash" then name = "Lava Lash"
 	elseif name == "Leishen" then name = "Lei Shen"
@@ -326,7 +288,7 @@ function M.prettyServer (origName)
 	elseif name == "Loserrantes" then name = "Los Errantes"
 	elseif name == "Maladath(au)" then name = "Maladath (AU)"
 	elseif name == "Mal'ganis" then name = "Mal'Ganis"
-	elseif name == "Marécagedezangar" then name = "Marécage de Zangar"
+	elseif name == "MarÃ©cagedezangar" then name = "MarÃ©cage de Zangar"
 	elseif name == "Mirageraceway" then name = "Mirage Raceway"
 	elseif name == "Mok'nathal" then name = "Mok'Nathal"
 	elseif name == "Mol'dar'smoxie" then name = "Mol'dar's Moxie"
@@ -338,7 +300,7 @@ function M.prettyServer (origName)
 	elseif name == "Orderofthecloudserpent" then name = "Order of the Cloud Serpent"
 	elseif name == "Penance(au)" then name = "Penance (AU)"
 	elseif name == "Penance(season)" then name = "Penance (Season)"
-	elseif name == "Pozzodell'eternità" then name = "Pozzo dell'Eternità"
+	elseif name == "Pozzodell'eternitÃ " then name = "Pozzo dell'EternitÃ "
 	elseif name == "Pyrewoodvillage" then name = "Pyrewood Village"
 	elseif name == "Quel'thalas" then name = "Quel'Thalas"
 	elseif name == "Remulos(au)" then name = "Remulos (AU)"
@@ -455,12 +417,34 @@ function M.addServer (name)
 	return name
 end
 
+function M.GetUnitFullName (unit)
+
+	if not unit then return nil end
+	
+	local name, extra = UnitName(unit)
+	
+	if not name or name == "" then return nil end
+	if issecretvalue and (issecretvalue(name) or (extra ~= nil and issecretvalue(extra))) then return nil end
+	
+	if V.wowIsForever == true then
+		if extra and extra ~= "" then
+			name = name .. " " .. extra
+		end
+		
+		return name .. "-" .. V.serverName
+	end
+	
+	if extra and extra ~= "" then
+		return name .. "-" .. extra
+	end
+	
+	return name
+end
+
 ----------------------
 -- SHARED VARIABLES --
 ----------------------
 
-V.serverName		= M.Proper(GetRealmName())
-V.playerName		= M.addServer(GetUnitName("player"), true)
 V.wowIsERA			= false
 V.wowIsTBC			= false
 V.wowIsWrath		= false
@@ -520,4 +504,6 @@ elseif (toc >= 120000 and toc < 129999) then
 	V.wowName		= "MN"
 end
 
-V.wowIsClassic = (V.wowIsRetail == false and V.wowIsForever == false)
+V.wowIsClassic	= (V.wowIsRetail == false and V.wowIsForever == false)
+V.serverName	= M.Proper(GetRealmName(), false)
+V.playerName	= M.addServer(M.GetUnitFullName("player") or GetUnitName("player"))

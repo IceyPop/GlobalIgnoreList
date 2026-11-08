@@ -12,9 +12,35 @@ local M = addon.M -- shared methods
 V.needSorted	= true
 V.nameUI		= ""
 
----------------
--- GLOBAL UI --
----------------
+-------------------------------
+-- CLIENT / TEMPLATE HELPERS --
+-------------------------------
+
+local isModernUI = (V.wowIsRetail == true) or (V.wowIsForever == true)
+
+local function CreateFrameWithFallback (frameType, name, parent, templates)
+	for _, template in ipairs(templates) do
+		local ok, frame = pcall(CreateFrame, frameType, name, parent, template)
+
+		if ok and frame then
+			return frame
+		end
+	end
+
+	return CreateFrame(frameType, name, parent)
+end
+
+local function CreateListButton (parent)
+	local templates
+	
+	if isModernUI then
+		templates = { "IgnoreListButtonTemplate", "FriendsFrameIgnoreButtonTemplate" }
+	else
+		templates = { "FriendsFrameIgnoreButtonTemplate", "IgnoreListButtonTemplate" }
+	end
+	
+	return CreateFrameWithFallback("Button", nil, parent, templates)
+end
 
 local function SetFrameTitle (frame, text)
 	if frame.SetTitle then
@@ -55,166 +81,493 @@ local WINDOW_OFFSET			= 113
 local BUTTON_HEIGHT			= 20
 local BUTTON_TOTAL			= math.floor((WINDOW_HEIGHT - WINDOW_OFFSET) / BUTTON_HEIGHT)
 local BUTTON_WIDTH			= WINDOW_WIDTH - 44
-local COL_NAME				= 130
-local COL_SERVER			= 150
+local SERVER_HIDDEN			= (V.wowIsForever == true)
+local COL_NAME				= SERVER_HIDDEN and 174 or 130
+local COL_SERVER			= SERVER_HIDDEN and 1 or 150
 local COL_TYPE				= 60
 local COL_LISTED			= 53
 local COL_EXPIRE			= 60
-local COL_NOTES				= 237
+local COL_NOTES				= SERVER_HIDDEN and 342 or 237
 local COL_DESC				= 210
 local COL_STATE				= 26
 local COL_FILTER			= 368
 local COL_BLOCKED			= 52
 local COL_INFOTEXT			= 400
 
--------------------------
--- DIALOGS AND BUTTONS --
--------------------------
+----------------------------------
+-- GIL DIALOG AND MENU ENGINE   --
+----------------------------------
 
-StaticPopupDialogs["GIL_REASON"] = {
+local DIALOG_WIDTH = 360
+local dialogPool   = {}
 
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "Edit ignore note for |cffffff00%s:",
-	maxLetters     = 128,
-	hasEditBox	   = 1,
-	whileDead      = 1,
-	button1        = L["BOX_3"],
-	button2        = L["BOX_5"],
-  
-	OnShow = function(self)
-		self.EditBox:SetText(GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)])
-		self.EditBox:SetFocus()
-	end,
-	OnAccept = function(self)
-		GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self.EditBox:GetText()
-		M.GILUpdateUI()
-	end,
-	EditBoxOnEnterPressed = function(self)
-		GlobalIgnoreDB.notes[M.hasAnyIgnored(V.nameUI)] = self:GetParent().EditBox:GetText()
-		self:GetParent():Hide()
-		M.GILUpdateUI()
-	end,
-	EditBoxOnEscapePressed = function(self)
-		self:GetParent():Hide()
+local function GILSetBackdrop (frame, bg, edge, tile, edgeSize, inset)
+	if not frame.SetBackdrop and BackdropTemplateMixin then
+		Mixin(frame, BackdropTemplateMixin)
 	end
-}
+	
+	if frame.SetBackdrop then
+		frame:SetBackdrop({
+			bgFile   = bg,
+			edgeFile = edge,
+			tile     = true,
+			tileSize = tile,
+			edgeSize = edgeSize,
+			insets   = { left = inset, right = inset, top = inset, bottom = inset },
+		})
+	end
+end
 
-local function setExpire (text)
+local function GILCreateDialog(index)
+
+	local f = CreateFrameWithFallback("Frame", "GIL_Dialog" .. index, UIParent, { "BackdropTemplate" })
+	
+	f:Hide()
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetFrameLevel(20 + index * 5)
+	f:SetWidth(DIALOG_WIDTH)
+	f:SetClampedToScreen(true)
+	f:EnableMouse(true)
+	f:EnableKeyboard(true)
+	
+	GILSetBackdrop(f, "Interface\\DialogFrame\\UI-DialogBox-Background", "Interface\\DialogFrame\\UI-DialogBox-Border", 32, 32, 11)
+	
+	f.text = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	f.text:SetWidth(DIALOG_WIDTH - 60)
+	f.text:SetPoint("TOP", f, "TOP", 0, -24)
+	f.text:SetJustifyH("CENTER")
+	
+	f.edit = CreateFrameWithFallback("EditBox", nil, f, { "InputBoxTemplate" })
+	f.edit:SetAutoFocus(false)
+	f.edit:SetSize(DIALOG_WIDTH - 90, 20)
+	f.edit:SetFontObject(ChatFontNormal)
+	f.edit:Hide()
+	
+	f.button1 = CreateFrameWithFallback("Button", nil, f, { "UIPanelButtonTemplate" })
+	f.button1:SetSize(120, 22)
+	f.button2 = CreateFrameWithFallback("Button", nil, f, { "UIPanelButtonTemplate" })
+	f.button2:SetSize(120, 22)
+	
+	function f:Accept()
+		local spec = self.spec
+		local txt  = self.edit:GetText()
+		
+		self.spec = nil
+		self:Hide()
+		
+		if spec and spec.onAccept then
+			spec.onAccept(txt, spec.data)
+		end
+	end
+	
+	function f:Cancel()
+		local spec = self.spec
+		
+		self.spec = nil
+		self:Hide()
+		
+		if spec and spec.onCancel then
+			spec.onCancel()
+		end
+	end
+	
+	f.button1:SetScript("OnClick", function() f:Accept() end)
+	f.button2:SetScript("OnClick", function() f:Cancel() end)
+	f.edit:SetScript("OnEnterPressed",  function() f:Accept() end)
+	f.edit:SetScript("OnEscapePressed", function() f:Cancel() end)
+	
+	f:SetScript("OnKeyDown", function(self, key)
+		if key == "ESCAPE" then
+			self:SetPropagateKeyboardInput(false)
+			self:Cancel()
+		else
+			self:SetPropagateKeyboardInput(true)
+		end
+	end)
+	
+	f:SetScript("OnHide", function(self)
+		self.edit:ClearFocus()
+		self.spec = nil
+	end)
+	
+	return f
+end
+
+
+function M.GIL_ShowDialog(spec, ...)
+	-- spec=text (format string), editBox, editText, maxLetters, button1, button2, onAccept(text, data), onCancel(), timeout, data
+
+	local f, slot
+
+	if spec.key then
+		for i = 1, #dialogPool do
+			if dialogPool[i]:IsShown() and dialogPool[i].spec and dialogPool[i].spec.key == spec.key then
+				f    = dialogPool[i]
+				slot = i
+				break
+			end
+		end
+	end
+	
+	for i = 1, #dialogPool do
+		if f then break end
+		
+		if not dialogPool[i]:IsShown() then
+			f    = dialogPool[i]
+			slot = i
+			break
+		end
+	end
+	
+	if not f then
+		slot = #dialogPool + 1
+		f    = GILCreateDialog(slot)
+		dialogPool[slot] = f
+	end
+	
+	local ok, text = pcall(format, spec.text or "", ...)
+	if not ok then text = spec.text or "" end
+	
+	f.spec = spec
+	f.text:SetText(text)
+	
+	local height = 24 + f.text:GetStringHeight() + 20
+	
+	if spec.editBox then
+		f.edit:ClearAllPoints()
+		f.edit:SetPoint("TOP", f.text, "BOTTOM", 0, -14)
+		f.edit:SetMaxLetters(spec.maxLetters or 0)
+		f.edit:SetText(tostring(spec.editText or ""))
+		f.edit:Show()
+		height = height + 34
+	else
+		f.edit:Hide()
+	end
+	
+	f.button1:SetText(spec.button1 or OKAY)
+	f.button1:ClearAllPoints()
+	f.button2:ClearAllPoints()
+	
+	if spec.button2 then
+		f.button2:SetText(spec.button2)
+		f.button1:SetPoint("BOTTOM", f, "BOTTOM", -65, 18)
+		f.button2:SetPoint("BOTTOM", f, "BOTTOM",  65, 18)
+		f.button2:Show()
+	else
+		f.button1:SetPoint("BOTTOM", f, "BOTTOM", 0, 18)
+		f.button2:Hide()
+	end
+	
+	f:SetHeight(height + 22 + 18)
+	f:ClearAllPoints()
+	f:SetPoint("CENTER", UIParent, "CENTER", 0, 120 - (slot - 1) * 40)
+	
+	f.timerId = (f.timerId or 0) + 1
+	
+	if spec.timeout then
+		local id = f.timerId
+		
+		C_Timer.After(spec.timeout, function()
+			if f:IsShown() and f.timerId == id then
+				f:Cancel()
+			end
+		end)
+	end
+	
+	f:Show()
+	
+	if spec.editBox then
+		f.edit:SetFocus()
+	end
+	
+	return f
+end
+
+-----------------------
+-- CONTEXT MENU      --
+-----------------------
+
+local menuFrame   = nil
+local menuCatcher = nil
+
+local function GILGetMenu()
+
+	if menuFrame then return menuFrame end
+	
+	menuCatcher = CreateFrame("Button", nil, UIParent)
+	menuCatcher:SetAllPoints(UIParent)
+	menuCatcher:SetFrameStrata("FULLSCREEN_DIALOG")
+	menuCatcher:SetFrameLevel(100)
+	menuCatcher:RegisterForClicks("AnyUp")
+	menuCatcher:Hide()
+	
+	menuFrame = CreateFrameWithFallback("Frame", "GIL_ContextMenu", UIParent, { "BackdropTemplate" })
+	menuFrame:Hide()
+	menuFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+	menuFrame:SetFrameLevel(110)
+	menuFrame:SetClampedToScreen(true)
+	menuFrame:EnableMouse(true)
+	menuFrame:EnableKeyboard(true)
+	
+	GILSetBackdrop(menuFrame, "Interface\\Tooltips\\UI-Tooltip-Background", "Interface\\Tooltips\\UI-Tooltip-Border", 16, 16, 4)
+	
+	if menuFrame.SetBackdropColor then
+		menuFrame:SetBackdropColor(0, 0, 0, 0.95)
+	end
+	
+	menuFrame.buttons = {}
+	menuFrame.titles  = {}
+	menuFrame.lines   = {}
+	
+	menuCatcher:SetScript("OnClick", function() menuFrame:Hide() end)
+	
+	menuFrame:SetScript("OnShow", function() menuCatcher:Show() end)
+	menuFrame:SetScript("OnHide", function() menuCatcher:Hide() end)
+	
+	menuFrame:SetScript("OnKeyDown", function(self, key)
+		if key == "ESCAPE" then
+			self:SetPropagateKeyboardInput(false)
+			self:Hide()
+		else
+			self:SetPropagateKeyboardInput(true)
+		end
+	end)
+	
+	return menuFrame
+end
+
+function M.GIL_ContextMenu (owner, builder)
+	-- params: (owner, function(owner, root) ... end)
+
+	local root = { items = {} }
+	
+	function root:CreateTitle(text)
+		self.items[#self.items + 1] = { kind = "title", text = text }
+	end
+	
+	function root:CreateDivider()
+		self.items[#self.items + 1] = { kind = "line" }
+	end
+	
+	function root:CreateButton(text, func)
+		self.items[#self.items + 1] = { kind = "button", text = text, func = func }
+	end
+	
+	builder(owner, root)
+	
+	if #root.items == 0 then return end
+	
+	local m = GILGetMenu()
+	
+	m:Hide()
+	
+	for _, w in ipairs(m.buttons) do w:Hide() end
+	for _, w in ipairs(m.titles)  do w:Hide() end
+	for _, w in ipairs(m.lines)   do w:Hide() end
+	
+	local used  = { button = 0, title = 0, line = 0 }
+	local width = 140
+	local laid  = {}
+	
+	for _, item in ipairs(root.items) do
+		local w
+		
+		if item.kind == "button" then
+			used.button = used.button + 1
+			w = m.buttons[used.button]
+			
+			if not w then
+				w = CreateFrame("Button", nil, m)
+				w:SetHeight(20)
+				w:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+				w.label = w:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+				w.label:SetPoint("LEFT", w, "LEFT", 8, 0)
+				w:SetScript("OnClick", function(self)
+					local func = self.func
+					m:Hide()
+					if func then func() end
+				end)
+				m.buttons[used.button] = w
+			end
+			
+			w.func = item.func
+			w.label:SetText(item.text or "")
+			width = math.max(width, w.label:GetStringWidth() + 36)
+			w.h = 20
+			
+		elseif item.kind == "title" then
+			used.title = used.title + 1
+			w = m.titles[used.title]
+			
+			if not w then
+				w = m:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+				m.titles[used.title] = w
+			end
+			
+			w:SetText(item.text or "")
+			width = math.max(width, w:GetStringWidth() + 36)
+			w.h = 20
+			
+		else
+			used.line = used.line + 1
+			w = m.lines[used.line]
+			
+			if not w then
+				w = m:CreateTexture(nil, "ARTWORK")
+				w:SetColorTexture(0.6, 0.6, 0.6, 0.5)
+				m.lines[used.line] = w
+			end
+			
+			w.h = 7
+		end
+		
+		laid[#laid + 1] = { w = w, kind = item.kind }
+	end
+	
+	local y = -8
+	
+	for _, e in ipairs(laid) do
+		local w = e.w
+		
+		w:ClearAllPoints()
+		
+		if e.kind == "button" then
+			w:SetPoint("TOPLEFT", m, "TOPLEFT", 8, y)
+			w:SetWidth(width - 16)
+		elseif e.kind == "title" then
+			w:SetPoint("TOPLEFT", m, "TOPLEFT", 16, y - 4)
+		else
+			w:SetPoint("TOPLEFT", m, "TOPLEFT", 12, y - 3)
+			w:SetSize(width - 24, 1)
+		end
+		
+		w:Show()
+		y = y - w.h
+	end
+	
+	m:SetSize(width, -y + 8)
+	
+	local x, cy = GetCursorPosition()
+	local scale = UIParent:GetEffectiveScale()
+	
+	m:ClearAllPoints()
+	m:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, cy / scale)
+	m:Show()
+end
+
+-------------------------
+-- DIALOG DEFINITIONS  --
+-------------------------
+
+local function setExpire (name, text)
 	if tonumber(text) then
-		GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)] = tonumber(text)
-		M.GILUpdateUI()
+		local idx = M.hasAnyIgnored(name)
+		
+		if idx and idx > 0 then
+			GlobalIgnoreDB.expList[idx] = tonumber(text)
+			M.GILUpdateUI()
+		end
 	end	
 end
 
-StaticPopupDialogs["GIL_CONFIRMPRUNE"] = {
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "|cffffff00"..L["BOX_12"].."|cffffffff\n\n"..L["BOX_13"],
-	whileDead      = 1,
-	button1        = L["BOX_6"],
-	button2        = L["BOX_5"],
-  
-	OnAccept = function(self, data)
-		M.PruneIgnoreList(data, true);
-	end,
-	EditBoxOnEnterPressed = function(self, data)
-		self:GetParent():Hide()
-	end,
-	EditBoxOnEscapePressed = function(self, data)
-		self:GetParent():Hide()
-	end
-}
+function M.GIL_ShowReason (name)
+	if not name or name == "" then return end
+	
+	local idx = M.hasAnyIgnored(name)
+	
+	M.GIL_ShowDialog({
+		key        = "reason",
+		text       = "Edit ignore note for |cffffff00%s:",
+		editBox    = true,
+		maxLetters = 128,
+		editText   = (idx and idx > 0) and GlobalIgnoreDB.notes[idx] or "",
+		button1    = L["BOX_3"],
+		button2    = L["BOX_5"],
+		onAccept   = function(text)
+			local i = M.hasAnyIgnored(name)
+			
+			if i and i > 0 then
+				GlobalIgnoreDB.notes[i] = text
+			end
+			
+			M.GILUpdateUI()
+		end,
+	}, name)
+end
 
-StaticPopupDialogs["GIL_PRUNE"] = {
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_11"],
-	maxLetters     = 4,
-	hasEditBox	   = 1,
-	whileDead      = 1,
-	button1        = L["BOX_6"],
-	button2        = L["BOX_5"],
-  
-	OnShow = function(self)
-		self.EditBox:SetText("365")
-		self.EditBox:SetFocus()
-	end,
-	OnAccept = function(self)
-		local d = nil
-		d = tonumber(self.EditBox:GetText());
-		if (d and d > 0) then
-			local c = M.PruneIgnoreList(d, false);
-			local f = StaticPopup_Show("GIL_CONFIRMPRUNE", c);
-			f.data = d;
-		end		
-	end,
-	EditBoxOnEnterPressed = function(self)
-		self:GetParent():Hide()
-	end,
-	EditBoxOnEscapePressed = function(self)
-		self:GetParent():Hide()
-	end
-}
+function M.GIL_ShowExpire (name)
+	if not name or name == "" then return end
+	
+	local idx = M.hasAnyIgnored(name)
+	
+	M.GIL_ShowDialog({
+		key        = "expire",
+		text       = "|cffffff00%s|cffffffff\n\n" .. L["BOX_1"],
+		editBox    = true,
+		maxLetters = 4,
+		editText   = (idx and idx > 0) and GlobalIgnoreDB.expList[idx] or "",
+		button1    = L["BOX_3"],
+		button2    = L["BOX_5"],
+		onAccept   = function(text) setExpire(name, text) end,
+	}, name)
+end
 
-StaticPopupDialogs["GIL_EXPIRE"] = {
+function M.GIL_ShowPrune()
+	M.GIL_ShowDialog({
+		key        = "prune",
+		text       = "|cffffff00%s|cffffffff\n\n" .. L["BOX_11"],
+		editBox    = true,
+		maxLetters = 4,
+		editText   = "365",
+		button1    = L["BOX_6"],
+		button2    = L["BOX_5"],
+		onAccept   = function(text)
+			local d = tonumber(text)
+			
+			if d and d > 0 then
+				local c = M.PruneIgnoreList(d, false)
+				
+				M.GIL_ShowDialog({
+					key      = "confirmprune",
+					text     = "|cffffff00" .. L["BOX_12"] .. "|cffffffff\n\n" .. L["BOX_13"],
+					button1  = L["BOX_6"],
+					button2  = L["BOX_5"],
+					onAccept = function() M.PruneIgnoreList(d, true) end,
+				}, c)
+			end
+		end,
+	}, L["BOX_12"])
+end
 
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_1"],
-	maxLetters     = 4,
-	hasEditBox	   = 1,
-	whileDead      = 1,
-	button1        = L["BOX_3"],
-	button2        = L["BOX_5"],
-  
-	OnShow         = function(self)
-		self.EditBox:SetText(GlobalIgnoreDB.expList[M.hasAnyIgnored(V.nameUI)])
-		self.EditBox:SetFocus()
-	end,
-	OnAccept       = function(self)
-		setExpire(self.EditBox:GetText())
-	end,
-	EditBoxOnEnterPressed = function(self)
-		setExpire(self:GetParent().EditBox:GetText())
-		self:GetParent():Hide()
-	end,
-	EditBoxOnEscapePressed = function(self)
-		self:GetParent():Hide()
-	end
-}
+function M.GIL_ShowFilterReset()
+	M.GIL_ShowDialog({
+		key      = "filterreset",
+		text     = "|cffffff00%s|cffffffff\n\n" .. L["BOX_2"],
+		button1  = L["BOX_4"],
+		button2  = L["BOX_5"],
+		onAccept = function()
+			M.ResetSpamFilters()
+			M.FilterListDrawUpdate(FilterScrollFrame)
+		end,
+	}, L["BOX_4"])
+end
 
-StaticPopupDialogs["GIL_FILTERRESET"] = {
-
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_2"],
-	whileDead      = 1,
-	button1        = L["BOX_4"],
-	button2        = L["BOX_5"],
-	OnAccept       = function(self)
-		M.ResetSpamFilters()
-		M.FilterListDrawUpdate(FilterScrollFrame)
-	end,	
-	EditBoxOnEscapePressed = function(self)
-		self:GetParent():Hide()
-	end
-}
-
-StaticPopupDialogs["GIL_FILTERREMOVE"] = {
-
-	preferredIndex = STATICPOPUPS_NUMDIALOGS,
-	text           = "|cffffff00%s|cffffffff\n\n"..L["BOX_9"],
-	whileDead      = 1,
-	button1        = L["BOX_10"],
-	button2        = L["BOX_5"],
-	OnAccept       = function(self)
-		if FilterScrollSelect <= 0 then
-			return
-		end
-		
-		M.RemoveChatFilter(FilterScrollSelect)
-		M.FilterListDrawUpdate(FilterScrollFrame)
-	end,	
-	EditBoxOnEscapePressed = function(self)
-		self:GetParent():Hide()
-	end
-}
+function M.GIL_ShowFilterRemove()
+	M.GIL_ShowDialog({
+		key      = "filterremove",
+		text     = "|cffffff00%s|cffffffff\n\n" .. L["BOX_9"],
+		button1  = L["BOX_10"],
+		button2  = L["BOX_5"],
+		onAccept = function()
+			if FilterScrollSelect <= 0 then
+				return
+			end
+			
+			M.RemoveChatFilter(FilterScrollSelect)
+			M.FilterListDrawUpdate(FilterScrollFrame)
+		end,
+	}, L["BOX_10"])
+end
 
 local function ButtonFilterRemove()
 
@@ -222,7 +575,7 @@ local function ButtonFilterRemove()
 		return
 	end
 	
-	StaticPopup_Show("GIL_FILTERREMOVE", L["BOX_10"])
+	M.GIL_ShowFilterRemove()
 end
 
 local function ButtonIgnoreRemove()
@@ -325,13 +678,9 @@ local function CreateFilterButtons()
 	FilterScrollButtons = {}
 	
 	for count = 1, BUTTON_TOTAL do
-
-		if V.wowIsClassic == true then
-			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
-		else
-			FilterScrollButtons[count] = CreateFrame("Button", nil, FilterScrollFrame:GetParent(), "IgnoreListButtonTemplate")
-		end
-
+	
+		FilterScrollButtons[count] = CreateListButton(FilterScrollFrame:GetParent())
+	
 		if count == 1 then
 			FilterScrollButtons[count]:SetPoint("TOPLEFT", FilterScrollFrame, -1, 0)
 		else
@@ -415,7 +764,20 @@ local function UpdateBlockButton(idx, count, winSize)
 	BlockScrollPlayer[idx]:Show()
 	BlockScrollPlayer[idx]:SetWidth(200)
 	BlockScrollPlayer[idx]:SetJustifyH("LEFT");
-	BlockScrollPlayer[idx]:SetText(player)
+	
+	local shownName = player
+	
+	BlockScrollPlayer[idx].fullName = player
+	
+	if V.wowIsForever == true and shownName then
+		local dash = string.find(shownName, "-", 1, true)
+		
+		if dash then
+			shownName = string.sub(shownName, 1, dash - 1)
+		end
+	end
+	
+	BlockScrollPlayer[idx]:SetText(shownName)
 	BlockScrollPlayer[idx]:SetScript("OnMouseUp", function(self,button)
 		if button == "RightButton" then
 			M.BlockScrollPlayerClick(self, button, count)
@@ -508,12 +870,12 @@ function M.BlockScrollTextOnLeave (self)
 end
 
 function M.BlockScrollPlayerClick(self, button, entry)
-	local name = self:GetText()
+	local name = self.fullName or self:GetText()
 	name = M.Proper(M.addServer(name))
 	if not (name and #name>=2) then return end
 	local index = M.hasGlobalIgnored(name)
 	local isIgnored = index and index > 0
-	MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+	M.GIL_ContextMenu(UIParent, function(ownerRegion, root)
 		root:CreateTitle(name)
 		root:CreateDivider()
 		if isIgnored then
@@ -596,7 +958,7 @@ function M.FilterScrollClick(self, button, down)
 	end
 	
 	if button == "RightButton" then	
-		MenuUtil.CreateContextMenu(UIParent,
+		M.GIL_ContextMenu(UIParent,
 			function(ownerRegion, root)
 				root:CreateTitle(L["RCM_10"])
 				root:CreateDivider()
@@ -731,11 +1093,7 @@ local function CreateIgnoreButtons()
 	
 	for count = 1, BUTTON_TOTAL do
 	
-		if V.wowIsClassic == true then
-			IgnoreScrollButtons[count] = CreateFrame("Button", nil, IgnoreScrollFrame:GetParent(), "FriendsFrameIgnoreButtonTemplate")
-		else
-			IgnoreScrollButtons[count] = CreateFrame("Button", nil, IgnoreScrollFrame:GetParent(), "IgnoreListButtonTemplate")
-		end
+		IgnoreScrollButtons[count] = CreateListButton(IgnoreScrollFrame:GetParent())
 	
 		if count == 1 then
 			IgnoreScrollButtons[count]:SetPoint("TOPLEFT", IgnoreScrollFrame, -1, 0)
@@ -755,6 +1113,10 @@ local function CreateIgnoreButtons()
 		IgnoreScrollButtons[count].server:SetPoint("LEFT", IgnoreScrollButtons[count].name, "RIGHT", 0, 0)
 		IgnoreScrollButtons[count].server:SetWidth(COL_SERVER)
 		IgnoreScrollButtons[count].server:SetJustifyH("LEFT")
+		
+		if SERVER_HIDDEN then
+			IgnoreScrollButtons[count].server:Hide()
+		end
 		
 		-- create type style
 		IgnoreScrollButtons[count].type = IgnoreScrollButtons[count]:CreateFontString("FontString", "OVERLAY", "GameFontHighlight")
@@ -787,7 +1149,10 @@ end
 
 function M.IgnoreScrollDoubleClick()
 	V.nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
-	StaticPopup_Show("GIL_REASON", V.nameUI)
+	
+	if not V.nameUI then return end
+	
+	M.GIL_ShowReason(V.nameUI)
 end
 
 function M.IgnoreScrollClick(self, button, down)
@@ -805,7 +1170,7 @@ function M.IgnoreScrollClick(self, button, down)
 	if button == "RightButton" then	
 		V.nameUI = GlobalIgnoreDB.ignoreList[IgnoreScrollIndex[IgnoreScrollSelect]]
 		
-		MenuUtil.CreateContextMenu(UIParent, function(ownerRegion, root)
+		M.GIL_ContextMenu(UIParent, function(ownerRegion, root)
 			root:CreateTitle(V.nameUI)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_1"],
@@ -815,7 +1180,7 @@ function M.IgnoreScrollClick(self, button, down)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_2"],
 				function()
-					StaticPopup_Show("GIL_EXPIRE", V.nameUI)
+					M.GIL_ShowExpire(V.nameUI)
 				end)
 			root:CreateButton(L["RCM_3"],
 				function()
@@ -1122,8 +1487,6 @@ local function createColumn (text, width, parent)
 	Header:SetScript("OnClick", columnClick)
 end
 
-
-
 --------------------
 -- LINK CONVERTER --
 --------------------
@@ -1179,9 +1542,155 @@ local function convertLink (text)
 	return "UNKNOWN"
 end
 
----------------------
--- BUILD UI FRAMES --
----------------------
+------------------------
+-- WINDOW POSITIONING --
+------------------------
+
+local function GILRectFits (left, bottom, width, height)
+	return left >= -1 and bottom >= -1 and left + width  <= UIParent:GetWidth()  + 1 and bottom + height <= UIParent:GetHeight() + 1
+end
+
+local function GILFrameScale (f)
+	return f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+end
+
+local function GILCenterFrame (f)
+	f:ClearAllPoints()
+	f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+end
+
+local function GILApplySavedPosition (f)
+	local pos = GlobalIgnoreDB.framePos
+	
+	f:ClearAllPoints()
+	
+	if pos and tonumber(pos.x) and tonumber(pos.y) then
+		local scale = GILFrameScale(f)
+		local w, h  = f:GetWidth() * scale, f:GetHeight() * scale
+		
+		if GILRectFits(pos.x - w / 2, pos.y - h / 2, w, h) then
+			f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", pos.x / scale, pos.y / scale)
+		else
+			-- saved spot is off the current screen: back to the default
+			GlobalIgnoreDB.framePos = nil
+			GILCenterFrame(f)
+		end
+	else
+		GILCenterFrame(f)
+	end
+end
+
+local function GILSaveFramePosition (f)
+	local cx, cy = f:GetCenter()
+	
+	if not cx then return end
+	
+	local scale = GILFrameScale(f)
+	local w, h  = f:GetWidth() * scale, f:GetHeight() * scale
+	local x, y  = cx * scale, cy * scale
+	
+	if not GILRectFits(x - w / 2, y - h / 2, w, h) then
+		GlobalIgnoreDB.framePos = nil
+		GILCenterFrame(f)
+		return
+	end
+	
+	GlobalIgnoreDB.framePos = { x = x, y = y }
+end
+
+local GRIP_MIN_SCALE = 0.6
+local GRIP_MAX_SCALE = 1.6
+
+local function GILClampScale (scale)
+	scale = tonumber(scale) or 1
+	
+	return math.max(GRIP_MIN_SCALE, math.min(GRIP_MAX_SCALE, scale))
+end
+
+local function GILScaleAt (frame, scale, left, top)
+	frame:SetScale(scale)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / scale, top / scale)
+end
+
+local function GILFinishScale (frame, left, top)
+	local scale = frame:GetScale()
+	local w, h  = frame:GetWidth() * scale, frame:GetHeight() * scale
+	
+	if GILRectFits(left, top - h, w, h) then
+		GlobalIgnoreDB.frameScale = scale
+		GILSaveFramePosition(frame)
+	else
+		frame:SetScale(1)
+		GlobalIgnoreDB.frameScale = 1
+		GlobalIgnoreDB.framePos   = nil
+		GILCenterFrame(frame)
+	end
+end
+
+local function GILCreateScaleGrip (frame)
+
+	local grip = CreateFrame("Button", nil, frame)
+	
+	grip:SetSize(16, 16)
+	grip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
+	grip:SetFrameLevel(frame:GetFrameLevel() + 20)
+	grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+	grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+	
+	grip:SetScript("OnMouseDown", function(self, button)
+		if button ~= "LeftButton" then return end
+		
+		local scale = frame:GetScale()
+		local es    = frame:GetEffectiveScale()
+		
+		self.startScale = scale
+		self.left       = frame:GetLeft() * scale
+		self.top        = frame:GetTop() * scale
+		self.startW     = frame:GetWidth() * es
+		self.startH     = frame:GetHeight() * es
+		self.startX, self.startY = GetCursorPosition()
+		self.scaling    = true
+		
+		self:SetScript("OnUpdate", function(self)
+			local cx, cy = GetCursorPosition()
+			local rw = (self.startW + (cx - self.startX)) / self.startW
+			local rh = (self.startH - (cy - self.startY)) / self.startH
+			
+			GILScaleAt(frame, GILClampScale(self.startScale * (rw + rh) / 2), self.left, self.top)
+		end)
+	end)
+	
+	grip:SetScript("OnMouseUp", function(self, button)
+		if not self.scaling then return end
+		
+		self.scaling = false
+		self:SetScript("OnUpdate", nil)
+		
+		GILFinishScale(frame, self.left, self.top)
+	end)
+	
+	grip:SetScript("OnDoubleClick", function(self)
+		local scale = frame:GetScale()
+		local left  = frame:GetLeft() * scale
+		local top   = frame:GetTop() * scale
+		
+		GILScaleAt(frame, 1, left, top)
+		GILFinishScale(frame, left, top)
+	end)
+	
+	grip:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine("Drag to resize")
+		GameTooltip:AddLine("Double-click to reset the size", 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	
+	grip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	
+	return grip
+end
 
 local function CreateUIFrames()
 
@@ -1219,7 +1728,11 @@ local function CreateUIFrames()
 	MainFrame:EnableMouse(true)
 	MainFrame:RegisterForDrag("LeftButton", "RightButton")
 	MainFrame:SetClampedToScreen(true)
+	
 	SetFrameTitle(MainFrame, "Global Ignore List")
+	
+	MainFrame:SetScale(GILClampScale(GlobalIgnoreDB.frameScale))
+	GILCreateScaleGrip(MainFrame)
 	
 	MainFrame:SetScript("OnMouseDown",
 		function(self)
@@ -1232,6 +1745,7 @@ local function CreateUIFrames()
 			if self.isMoving then
 				self:StopMovingOrSizing()
 				self.isMoving = false
+				GILSaveFramePosition(self)
 			end
 		end)
 		
@@ -1247,14 +1761,16 @@ local function CreateUIFrames()
 	icon:SetSize(60, 60)
 	icon:SetPoint("TOPLEFT", -5, 7)
 	icon:SetTexture("Interface\\FriendsFrame\\Battlenet-Portrait")
+	
+	local tabTemplates
 
-	local tabTemplate = "PanelTabButtonTemplate"
-
-	if V.wowIsClassic == true then
-		tabTemplate = "CharacterFrameTabButtonTemplate"
+	if isModernUI then
+		tabTemplates = { "CharacterFrameTabTemplate", "PanelTabButtonTemplate", "CharacterFrameTabButtonTemplate" }
+	else
+		tabTemplates = { "CharacterFrameTabButtonTemplate", "PanelTabButtonTemplate", "CharacterFrameTabTemplate" }
 	end
 		
-	local Tab1Button = CreateFrame("Button", "GILTab1", MainFrame, tabTemplate)
+	local Tab1Button = CreateFrameWithFallback("Button", "GILTab1", MainFrame, tabTemplates)
 	
 	Tab1Button:SetPoint("TOPLEFT", MainFrame, "BOTTOMLEFT", 20, 1)
 	Tab1Button:SetText(L["TAB_1"])
@@ -1270,7 +1786,7 @@ local function CreateUIFrames()
 			PanelTemplates_SetTab(MainFrame, 1)
 		end)
 
-	local Tab2Button = CreateFrame("Button", "GILTab2", MainFrame, tabTemplate)
+	local Tab2Button = CreateFrameWithFallback("Button", "GILTab2", MainFrame, tabTemplates)
 
 	Tab2Button:SetPoint("LEFT", "GILTab1", "RIGHT", -16, 0)
 	Tab2Button:SetText(L["TAB_2"])
@@ -1286,7 +1802,7 @@ local function CreateUIFrames()
 			PanelTemplates_SetTab(MainFrame, 2)
 		end)
 		
-	local Tab3Button = CreateFrame("Button", "GILTab3", MainFrame, tabTemplate)
+	local Tab3Button = CreateFrameWithFallback("Button", "GILTab3", MainFrame, tabTemplates)
 	
 	Tab3Button:SetPoint("LEFT", "GILTab2", "RIGHT", -16, 0)
 	Tab3Button:SetText(L["TAB_3"])
@@ -1319,6 +1835,13 @@ local function CreateUIFrames()
 	
 	createColumn(L["COL_1"], COL_NAME, Tab1Frame)
 	createColumn(L["COL_2"], COL_SERVER, Tab1Frame)
+	
+	if SERVER_HIDDEN then
+		local serverHeader = _G[Tab1Frame:GetName() .. "Header2"]
+		
+		if serverHeader then serverHeader:Hide() end
+	end
+	
 	createColumn(L["COL_3"], COL_TYPE, Tab1Frame)
 	createColumn(L["COL_4"], COL_LISTED, Tab1Frame)
 	createColumn(L["COL_5"], COL_EXPIRE, Tab1Frame)
@@ -1356,7 +1879,7 @@ local function CreateUIFrames()
 	Button2:SetSize(110, 22)
 	Button2:SetText(L["BUT_8"])
 	Button2:SetPoint("RIGHT", "GILFrame1IgnoreButton", "LEFT", 0, 0)	
-	Button2:SetScript("OnClick", function(self) StaticPopup_Show("GIL_PRUNE", L["BOX_12"]) end)
+	Button2:SetScript("OnClick", function(self) M.GIL_ShowPrune() end)
 
 	createSortedIndex(1)
 
@@ -1447,7 +1970,7 @@ local function CreateUIFrames()
 	Button:SetPoint("BOTTOMLEFT", -1, -24)	
 	Button:SetScript("OnClick",
 		function(self)
-			StaticPopup_Show("GIL_FILTERRESET", L["BOX_4"])
+			M.GIL_ShowFilterReset()
 		end
 	)
 
@@ -2059,14 +2582,33 @@ local function friendsShow()
 	if MainFrame ~= nil then
 		MainFrame:ClearAllPoints()
 
-		if _G.SocialUIFrame then
-			MainFrame:SetPoint("TOPLEFT", _G.SocialUIFrame, "TOPRIGHT", 50, -10)
-		elseif _G.FriendsFrame then
-			MainFrame:SetPoint("TOPLEFT", _G.FriendsFrame, "TOPRIGHT", 12, -10)
-		else
-			MainFrame:SetPoint("CENTER", UIParent)
-		end
+		local anchor, xo, yo
 
+		if _G.SocialUIFrame then
+			anchor, xo, yo = _G.SocialUIFrame, 46, -10
+		elseif _G.FriendsFrame then
+			anchor, xo, yo = _G.FriendsFrame, 12, -10
+		end		
+		
+		local fits = (anchor ~= nil)
+		
+		if anchor and anchor:GetRight() and anchor:GetTop() then
+			local ascale = anchor:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			local scale  = GILFrameScale(MainFrame)
+			local w, h   = MainFrame:GetWidth() * scale, MainFrame:GetHeight() * scale
+			local left   = anchor:GetRight() * ascale + xo * scale
+			local top    = anchor:GetTop() * ascale + yo * scale
+			
+			fits = GILRectFits(left, top - h, w, h)
+		end
+		
+		if anchor and fits then
+			MainFrame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", xo, yo)
+		else
+			-- no social frame, or the window would not fit beside it
+			GILCenterFrame(MainFrame)
+		end
+		
 		MainFrame:Show()
 	end
 end
@@ -2092,7 +2634,6 @@ elseif _G.FriendsFrame then
 	_G.FriendsFrame:HookScript("OnShow", friendsShow)
 	_G.FriendsFrame:HookScript("OnHide", friendsHide)
 end
-
 --------------------------
 -- HOOK INTO CHAT LINKS --
 --------------------------
@@ -2152,5 +2693,134 @@ function M.GILUpdateUI (forced)
 end
 
 function M.GIL_GUI()
+	local wasShown = MainFrame ~= nil and MainFrame:IsShown()
+	
 	CreateUIFrames()
+	
+	if MainFrame and not wasShown then
+		GILApplySavedPosition(MainFrame)
+	end
+end
+
+--------------------
+-- MINIMAP BUTTON --
+--------------------
+
+local minimapButton = nil
+
+local function GILMinimapAtan2(y, x)
+	if math.atan2 then return math.atan2(y, x) end
+	return math.atan(y, x)
+end
+
+local function GILMinimapPosition()
+	if not minimapButton then return end
+	
+	local angle  = math.rad(GlobalIgnoreDB.minimapAngle or 215)
+	local radius = (Minimap:GetWidth() / 2) + 5
+	
+	minimapButton:ClearAllPoints()
+	minimapButton:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * radius, math.sin(angle) * radius)
+end
+
+local function GILMinimapIgnoreTarget()
+	if UnitExists("target") and UnitIsPlayer("target") then
+		M.ignoreFromCmd("")
+	end
+end
+
+function M.GIL_CreateMinimapButton()
+
+	if minimapButton then return end
+	if not Minimap then return end
+	
+	local b = CreateFrame("Button", "GIL_MinimapButton", Minimap)
+	minimapButton = b
+	
+	b:SetSize(31, 31)
+	b:SetFrameStrata("MEDIUM")
+	b:SetFrameLevel(8)
+	b:SetClampedToScreen(true)
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	b:RegisterForDrag("LeftButton")
+	b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+	
+	local bg = b:CreateTexture(nil, "BACKGROUND")
+	bg:SetSize(20, 20)
+	bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+	bg:SetPoint("TOPLEFT", b, "TOPLEFT", 7, -5)
+	
+	local icon = b:CreateTexture(nil, "ARTWORK")
+	icon:SetSize(17, 17)
+	icon:SetTexture("Interface\\Icons\\ui_chat")
+	icon:SetPoint("TOPLEFT", b, "TOPLEFT", 7, -6)
+	
+	local border = b:CreateTexture(nil, "OVERLAY")
+	border:SetSize(53, 53)
+	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+	border:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	
+	b:SetScript("OnClick", function(self, button)
+		-- left or right click opens/closes the window, shift + click ignores the target
+		if IsShiftKeyDown() then
+			GILMinimapIgnoreTarget()
+		elseif MainFrame and MainFrame:IsShown() then
+			MainFrame:Hide()
+		else
+			M.GIL_GUI()
+		end
+	end)
+	
+	b:SetScript("OnDragStart", function(self)
+		self.dragging = true
+		GameTooltip:Hide()
+		
+		self:SetScript("OnUpdate", function()
+			local mx, my = Minimap:GetCenter()
+			local px, py = GetCursorPosition()
+			local scale  = Minimap:GetEffectiveScale()
+			
+			GlobalIgnoreDB.minimapAngle = math.deg(GILMinimapAtan2(py / scale - my, px / scale - mx))
+			GILMinimapPosition()
+		end)
+	end)
+	
+	b:SetScript("OnDragStop", function(self)
+		self.dragging = false
+		self:SetScript("OnUpdate", nil)
+	end)
+	
+	b:SetScript("OnEnter", function(self)
+		if self.dragging then return end
+		
+		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+		GameTooltip:AddLine("Global Ignore List")
+		GameTooltip:AddLine("Right or Left Click: Open GUI", 1, 1, 1)
+		GameTooltip:AddLine("Shift-Click: Ignore current target", 1, 1, 1)
+		GameTooltip:AddLine("Drag: Move icon", 0.7, 0.7, 0.7)
+		GameTooltip:Show()
+	end)
+	
+	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	
+	GILMinimapPosition()
+	
+	if GlobalIgnoreDB.minimapHide == true then
+		b:Hide()
+	end
+end
+
+function M.GIL_ToggleMinimapButton()
+	M.GIL_CreateMinimapButton()
+	
+	if not minimapButton then return end
+	
+	if minimapButton:IsShown() then
+		minimapButton:Hide()
+		GlobalIgnoreDB.minimapHide = true
+		M.ShowMsg("Minimap button hidden. Type /gi minimap to show it again")
+	else
+		minimapButton:Show()
+		GlobalIgnoreDB.minimapHide = false
+	end
 end
