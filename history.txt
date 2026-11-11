@@ -1,5 +1,19 @@
 => VERSION HISTORY
 
+=> 12.1.7.4
+
+I decided to merge a new addon I was working on into GIL and this is by far the largest two updates I have ever done:
+
+Added a player note system which has a built in kill-on-sight tracker for our PVPers out there!
+
+Added guild ignore.  I have gone back and forth on doing this for about 6-8 years because Blizzard removed the ability for addons to take census of online guilds and what usage is left is very limited.  This allows guilds to be ignored, but they must occasionally be manually "scanned" for updates.  And those scans have time and result limitations so you'll basically want to scan occasionally using the guild scanner button.
+
+Added the ability to share/backup the ignore list, chat filters, player notes, and guild ignore data
+
+Fixed the bug where the UI was only opening in 12.1.7 with the friends UI.  It should now work in all Wow versions.
+
+I'll need to update the Curse site and all the documentation which is long overdue in the (hopefully near) future.
+
 => 12.1.7.3
 
 Major update adds support for Wow Forever.

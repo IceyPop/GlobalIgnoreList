@@ -46,7 +46,7 @@ function M.GIL_LFG_Update (self)
 	
 	local info = C_LFGList.GetSearchResultInfo(self.resultID);
 	
-	if (info ~= nil and M.hasGlobalIgnored(M.Proper(M.addServer(info.leaderName))) > 0) then
+	if (info ~= nil and info.leaderName ~= nil and (M.hasGlobalIgnored(M.Proper(M.addServer(info.leaderName))) > 0 or M.hasGuildIgnored(M.Proper(M.addServer(info.leaderName))))) then
 		self.Name:SetTextColor(RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b);
 	end	
 end
@@ -71,6 +71,10 @@ function M.GIL_LFG_Tooltip (self)
 				GameTooltip:AddLine("|cff69CCF0"..notes)
 			end
 		
+			GameTooltip:Show()
+		elseif M.hasGuildIgnored(M.Proper(M.addServer(info.leaderName))) then
+			GameTooltip:AddLine(" ")
+			GameTooltip:AddLine("|c00ff0000" .. L["RCM_8"])
 			GameTooltip:Show()
 		end
 	end
@@ -103,11 +107,18 @@ function M.GIL_LFG_ApplicantMenu(owner, root, contextData)
 		end)	
 end
 
-----------------------
--- UNIT MENU- HACKS --
-----------------------
+---------------------
+-- UNIT MENU HACKS --
+---------------------
+
+function M.GIL_IsGamepadActive()
+	-- Need to get the UI enabled status but I can't figure out where
+	-- Tried C_GamePad.IsEnabled but it doesnt match the UI setting
+	return false
+end
 
 function M.GIL_UnitMenuPlayer (owner, root, contextData)
+	if M.GIL_IsGamepadActive() then return end
 	if not contextData or not contextData.unit then return end
 
 	local unit = contextData.unit
@@ -132,6 +143,16 @@ function M.GIL_UnitMenuPlayer (owner, root, contextData)
 			C_FriendList.AddOrDelIgnore(M.addServer(target))
 			M.GILUpdateUI(true)
 		end)
+	root:CreateButton((M.GIL_NoteFind(target) and L["NOTE_14"]) or L["NOTE_1"],
+		function(owner, root, contextData)
+			if not M.GIL_NoteAddUnit(unit) then
+				M.GIL_NotesAddDialog(M.addServer(target), unit)
+			end
+		end)
+
+	if M.GIL_GuildMenuUnit then
+		M.GIL_GuildMenuUnit(root, unit)
+	end
 end
 
 -----------------------
@@ -165,7 +186,7 @@ function M.GIL_HookFunctions()
 		end
 	end
 	
-	if GlobalIgnoreDB.useUnitHacks == true and hasMenu and V.wowIsForever == false then
+	if GlobalIgnoreDB.useUnitHacks == true and hasMenu and not M.GIL_IsGamepadActive() then
 		Menu.ModifyMenu("MENU_UNIT_ENEMY_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PARTY", M.GIL_UnitMenuPlayer)

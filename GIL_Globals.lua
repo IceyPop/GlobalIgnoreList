@@ -454,6 +454,7 @@ V.wowIsRetail		= false
 V.wowIsForever		= false
 V.wowLongName		= "Unknown"
 V.wowName			= V.wowLongName
+V.wowLevelCap		= 60
 
 -- Color yellow: ffff0000
 -- Color white: ffffff00
@@ -477,21 +478,28 @@ elseif (toc >= 20000 and toc <= 29999) then
 	V.wowIsTBC	= true
 	V.wowLongName	= "The Burning Crusade"
 	V.wowName		= "TBC"
+	V.wowLevelCap	= 70
 elseif (toc >= 30000 and toc <= 39999) then
 	V.wowIsWrath	= true
 	V.wowLongName	= "Wrath of the Lich King"
 	V.wowName		= "WOTLK"
+	V.wowLevelCap	= 80
 elseif (toc >= 40000 and toc <= 49999) then
 	V.wowIsCata	= true
 	V.wowLongName	= "Cataclysm"
 	V.wowName		= "Cata"
+	V.wowLevelCap	= 85
 elseif (toc >= 50000 and toc <= 59999) then
 	V.wowIsMOP	= true
 	V.wowLongName	= "Mists of Pandaria"
 	V.wowName		= "MOP"
+	V.wowLevelCap	= 90
 else
 	V.wowIsRetail = true
+	V.wowLevelCap = GetMaxLevelForLatestExpansion()
 end
+
+-- If we ever do classic releases of these, this will have to be redone
 
 if (toc >= 100000 and toc < 109999) then
 	V.wowLongName = "Dragonflight"

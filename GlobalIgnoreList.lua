@@ -149,6 +149,24 @@ local function AddToList(newname, newfaction, newnote, newtype)
 	M.GIL_LFG_Refresh()
 end
 
+-- used by the share/import feature (GIL_Share.lua); keeps date and expiration of exported entries
+function M.GIL_ImportEntry (name, faction, date, note, exp, entryType)
+
+	AddToList(name, faction, note, entryType)
+
+	local index = #GlobalIgnoreDB.ignoreList
+
+	if date and date ~= "" then
+		GlobalIgnoreDB.dateList[index] = date
+	end
+
+	if exp then
+		GlobalIgnoreDB.expList[index] = exp
+	end
+
+	return index
+end
+
 local function RemoveFromList (index)
 	local name = GlobalIgnoreDB.ignoreList[index]
 	if name then
@@ -699,7 +717,7 @@ function M.SyncIgnoreList (silent)
 					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
 
 					if ok then
-						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false or V.isWowForever == true)
+						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false or V.wowIsForever == true)
 					end
 					
 					if ok then
@@ -1138,7 +1156,7 @@ local function EventHandler (self, event, sender, ...)
 				if name then
 					name = M.Proper(M.addServer(name))
 					
-					if M.hasGlobalIgnored(name) > 0 and M.hasGroupWarning(name) == 0 then
+					if (M.hasGlobalIgnored(name) > 0 or M.hasGuildIgnored(name)) and M.hasGroupWarning(name) == 0 then
 						doWarn = true
 						groupWarning[#groupWarning + 1] = name
 					end
@@ -1163,7 +1181,7 @@ local function EventHandler (self, event, sender, ...)
 	
 		sender = M.Proper(M.addServer(sender))
 
-		if M.hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 or M.hasGuildIgnored(sender) then
 			DeclineGroup()			
 			if GlobalIgnoreDB.showDeclines == true then
 				M.ShowMsg (format(L["MSG_2"], sender))
@@ -1178,7 +1196,7 @@ local function EventHandler (self, event, sender, ...)
 	if event == "GUILD_INVITE_REQUEST" and V.GIL_Loaded == true then
 		sender = M.Proper(M.addServer(sender))
 		
-		if M.hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 or M.hasGuildIgnored(sender) then
 			DeclineGuild()
 			if GlobalIgnoreDB.showDeclines == true then
 				M.ShowMsg (format(L["MSG_4"], sender))
@@ -1191,7 +1209,7 @@ local function EventHandler (self, event, sender, ...)
 	if event == "DUEL_REQUESTED" and V.GIL_Loaded == true then
 		sender = M.Proper(M.addServer(sender))
 		
-		if M.hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 or M.hasGuildIgnored(sender) then
 			CancelDuel()
 			if GlobalIgnoreDB.showDeclines == true then
 				M.ShowMsg (format(L["MSG_3"], sender))
@@ -1204,7 +1222,7 @@ local function EventHandler (self, event, sender, ...)
 	if event == "TRADE_REQUEST" and V.GIL_Loaded == true then
 		sender = M.Proper(M.addServer(sender))
 		
-		if M.hasGlobalIgnored(sender) > 0 then
+		if M.hasGlobalIgnored(sender) > 0 or M.hasGuildIgnored(sender) then
 			CancelTrade()
 			if GlobalIgnoreDB.showDeclines == true then
 				M.ShowMsg (format(L["MSG_5"], sender))
@@ -1989,7 +2007,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 			from = M.Proper(string.sub(from, 1, idx - 1) .. "-" ..string.sub(from, idx + 1, string.len(from)))
 		end
 				
-		if M.hasGlobalIgnored(from) > 0 or hasServerIgnored(M.getServer(from)) > 0 then
+		if M.hasGlobalIgnored(from) > 0 or M.hasGuildIgnored(from) or hasServerIgnored(M.getServer(from)) > 0 then
 			
 			if event == "CHAT_MSG_WHISPER" then
 				local temp = from .. math.ceil(GetTime() - 0.5)
@@ -2167,6 +2185,8 @@ end
 
 function SlashCmdList.GIGNORE (msg)
 
+	local rawMsg = msg		-- original case, used for player notes
+	
 	msg = M.strDown(msg)
 	
 	local args   = {}
@@ -2243,6 +2263,14 @@ function SlashCmdList.GIGNORE (msg)
 	
 		GlobalIgnoreDB.sameserver = false
 		M.ShowMsg(L["CMD_11"])
+		
+	elseif args[1] == "note" or args[1] == "kos" then
+	
+		M.GIL_NoteFromCmd(rawMsg, args[1] == "kos")
+
+	elseif args[1] == "guild" then
+
+		M.GIL_GuildFromCmd(rawMsg)
 		
 	elseif args[1] == "minimap" then
 	
@@ -2362,6 +2390,9 @@ function SlashCmdList.GIGNORE (msg)
 		M.ShowMsg ("  " .. L["HELP_8"])
 		M.ShowMsg ("  " .. L["HELP_15"])
 		M.ShowMsg ("  " .. L["HELP_16"])
+		M.ShowMsg ("  " .. L["HELP_17"])
+		M.ShowMsg ("  " .. L["HELP_18"])
+		M.ShowMsg ("  " .. L["HELP_19"])
 		M.ShowMsg ("  " .. L["HELP_9"])
 		M.ShowMsg ("")
 		M.ShowMsg ("  " .. format(L["HELP_10"], OnOff(GlobalIgnoreDB.chatmsg)))
@@ -2387,7 +2418,7 @@ C_PartyInfo.InviteUnit = function (name)
 
 	name = M.Proper(name)
 	
-	if M.hasGlobalIgnored(M.addServer(name)) > 0 then
+	if M.hasGlobalIgnored(M.addServer(name)) > 0 or M.hasGuildIgnored(M.addServer(name)) then
 		partyNameUI = name
 		
 		M.GIL_ShowDialog({
@@ -2402,7 +2433,8 @@ C_PartyInfo.InviteUnit = function (name)
 	end
 end
 
--- returns name (with server), note, days
+-- TODO: REDO!
+
 local function GILParseIgnoreArg(name)
 
 	local note = ""
@@ -2426,7 +2458,7 @@ local function GILParseIgnoreArg(name)
 				note   = M.trim(sub(rest, space + 1)) or ""
 			end
 			
-			if server == "" then server = FOREVER_SERVER end
+			if server == "" then server = V.serverName end
 			name = base .. "-" .. server
 		end
 	else

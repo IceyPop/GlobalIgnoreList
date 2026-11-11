@@ -118,7 +118,7 @@ local function GILSetBackdrop (frame, bg, edge, tile, edgeSize, inset)
 	end
 end
 
-local function GILCreateDialog(index)
+local function GILCreateDialog (index)
 
 	local f = CreateFrameWithFallback("Frame", "GIL_Dialog" .. index, UIParent, { "BackdropTemplate" })
 	
@@ -569,6 +569,12 @@ function M.GIL_ShowFilterRemove()
 	}, L["BOX_10"])
 end
 
+function M.GIL_RefreshFilterList()
+	if FilterScrollFrame then
+		M.FilterListDrawUpdate(FilterScrollFrame)
+	end
+end
+
 local function ButtonFilterRemove()
 
 	if FilterScrollSelect <= 0 then
@@ -972,6 +978,11 @@ function M.FilterScrollClick(self, button, down)
 						ButtonFilterRemove()
 					end
 				)
+				root:CreateButton(L["RCM_16"],
+					function()
+						M.GIL_ExportFilters(FilterScrollSelect)
+					end
+				)
 				root:CreateDivider()				
 				root:CreateButton(L["RCM_13"] .. " (" .. #GlobalIgnoreDB.filterBlocked[FilterScrollSelect] .. ")",
 					function()
@@ -1176,6 +1187,10 @@ function M.IgnoreScrollClick(self, button, down)
 			root:CreateButton(L["RCM_1"],
 				function()
 					M.IgnoreScrollDoubleClick()
+				end)
+			root:CreateButton(L["RCM_17"],
+				function()
+					M.GIL_ExportIgnores(IgnoreScrollIndex[IgnoreScrollSelect])
 				end)
 			root:CreateDivider()
 			root:CreateButton(L["RCM_2"],
@@ -1692,6 +1707,18 @@ local function GILCreateScaleGrip (frame)
 	return grip
 end
 
+-- pieces the Player Notes tab (GIL_Notes.lua) needs from this file
+M.UIKit = {
+	CreateListButton	= CreateListButton,
+	WINDOW_WIDTH		= WINDOW_WIDTH,
+	WINDOW_HEIGHT		= WINDOW_HEIGHT,
+	WINDOW_OFFSET		= WINDOW_OFFSET,
+	BUTTON_HEIGHT		= BUTTON_HEIGHT,
+	BUTTON_WIDTH		= BUTTON_WIDTH,
+	BUTTON_TOTAL		= BUTTON_TOTAL,
+	SERVER_HIDDEN		= SERVER_HIDDEN,
+}
+
 local function CreateUIFrames()
 
 	if MainFrame ~= nil then
@@ -1782,6 +1809,8 @@ local function CreateUIFrames()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
 			Tab2FrameBlock:Hide()
+			if M.GIL_NotesHide then M.GIL_NotesHide() end
+			if M.GIL_GuildHide then M.GIL_GuildHide() end
 			Tab1Frame:Show()
 			PanelTemplates_SetTab(MainFrame, 1)
 		end)
@@ -1796,6 +1825,8 @@ local function CreateUIFrames()
 		function(self)
 			Tab1Frame:Hide()
 			Tab3Frame:Hide()
+			if M.GIL_NotesHide then M.GIL_NotesHide() end
+			if M.GIL_GuildHide then M.GIL_GuildHide() end
 			
 			M.FilterScrollChangeState(-1)
 					
@@ -1805,7 +1836,7 @@ local function CreateUIFrames()
 	local Tab3Button = CreateFrameWithFallback("Button", "GILTab3", MainFrame, tabTemplates)
 	
 	Tab3Button:SetPoint("LEFT", "GILTab2", "RIGHT", -16, 0)
-	Tab3Button:SetText(L["TAB_3"])
+	Tab3Button:SetText(L["TAB_4"])
 	Tab3Button:SetID("3")
 
 	Tab3Button:SetScript("OnClick",
@@ -1814,8 +1845,46 @@ local function CreateUIFrames()
 			Tab2Frame:Hide()
 			Tab2FrameEdit:Hide()
 			Tab2FrameBlock:Hide()
-			Tab3Frame:Show()
+			Tab3Frame:Hide()
+			if M.GIL_GuildHide then M.GIL_GuildHide() end
+			if M.GIL_NotesShow then M.GIL_NotesShow() end
 			PanelTemplates_SetTab(MainFrame, 3)
+		end)
+
+	local TabCButton = CreateFrameWithFallback("Button", "GILTab4", MainFrame, tabTemplates)
+
+	TabCButton:SetPoint("LEFT", "GILTab3", "RIGHT", -16, 0)
+	TabCButton:SetText(L["GUILD_1"])
+	TabCButton:SetID("4")
+
+	TabCButton:SetScript("OnClick",
+		function(self)
+			Tab1Frame:Hide()
+			Tab2Frame:Hide()
+			Tab2FrameEdit:Hide()
+			Tab2FrameBlock:Hide()
+			Tab3Frame:Hide()
+			if M.GIL_NotesHide then M.GIL_NotesHide() end
+			if M.GIL_GuildShow then M.GIL_GuildShow() end
+			PanelTemplates_SetTab(MainFrame, 4)
+		end)
+		
+	local Tab4Button = CreateFrameWithFallback("Button", "GILTab5", MainFrame, tabTemplates)
+	
+	Tab4Button:SetPoint("LEFT", "GILTab4", "RIGHT", -16, 0)
+	Tab4Button:SetText(L["TAB_3"])
+	Tab4Button:SetID("5")
+
+	Tab4Button:SetScript("OnClick",
+		function(self)
+			Tab1Frame:Hide()
+			Tab2Frame:Hide()
+			Tab2FrameEdit:Hide()
+			Tab2FrameBlock:Hide()
+			if M.GIL_NotesHide then M.GIL_NotesHide() end
+			if M.GIL_GuildHide then M.GIL_GuildHide() end
+			Tab3Frame:Show()
+			PanelTemplates_SetTab(MainFrame, 5)
 		end)
 		
 	------------------
@@ -1864,6 +1933,12 @@ local function CreateUIFrames()
 	Tab1Frame.infotext:SetWidth(COL_INFOTEXT)
 	Tab1Frame.infotext:SetJustifyH("CENTER")
 	Tab1Frame.infotext:SetPoint("TOP", 0, 46)
+
+	Tab1Frame.hint = Tab1Frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	Tab1Frame.hint:SetWidth(150)
+	Tab1Frame.hint:SetJustifyH("RIGHT")
+	Tab1Frame.hint:SetPoint("TOPRIGHT", -2, 54)
+	Tab1Frame.hint:SetText(L["HINT_1"])
 	
 	CreateIgnoreButtons()
 	
@@ -1880,6 +1955,22 @@ local function CreateUIFrames()
 	Button2:SetText(L["BUT_8"])
 	Button2:SetPoint("RIGHT", "GILFrame1IgnoreButton", "LEFT", 0, 0)	
 	Button2:SetScript("OnClick", function(self) M.GIL_ShowPrune() end)
+	
+	local Button3 = CreateFrame("Button", "GILFrame1ShareButton", Tab1Frame, "UIPanelButtonTemplate")
+	
+	Button3:SetSize(110, 22)
+	Button3:SetText(L["BUT_12"])
+	Button3:SetPoint("BOTTOMLEFT", -1, -24)
+	Button3:SetScript("OnClick",
+		function(self)
+			local idx = nil
+			
+			if IgnoreScrollSelect > 0 then
+				idx = IgnoreScrollIndex[IgnoreScrollSelect]
+			end
+			
+			M.GIL_ShowIgnoreShareMenu(idx)
+		end)
 
 	createSortedIndex(1)
 
@@ -1905,6 +1996,12 @@ local function CreateUIFrames()
 	Tab2Frame.infotext:SetWidth(COL_INFOTEXT)
 	Tab2Frame.infotext:SetJustifyH("CENTER")
 	Tab2Frame.infotext:SetPoint("TOP", 0, 46)
+
+	Tab2Frame.hint = Tab2Frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	Tab2Frame.hint:SetWidth(150)
+	Tab2Frame.hint:SetJustifyH("RIGHT")
+	Tab2Frame.hint:SetPoint("TOPRIGHT", -2, 54)
+	Tab2Frame.hint:SetText(L["HINT_1"])
 	
 	createColumn(L["COL_9"],  COL_DESC + 10,   Tab2Frame)
 	createColumn("",          COL_STATE + 12,  Tab2Frame)
@@ -1971,6 +2068,16 @@ local function CreateUIFrames()
 	Button:SetScript("OnClick",
 		function(self)
 			M.GIL_ShowFilterReset()
+		end
+	)
+
+	local Button = CreateFrame("Button", "GILFrame2ShareButton", Tab2Frame, "UIPanelButtonTemplate")
+	Button:SetSize(110, 22)
+	Button:SetText(L["BUT_12"])
+	Button:SetPoint("LEFT", "GILFrame2ResetButton", "RIGHT", 0, 0)
+	Button:SetScript("OnClick",
+		function(self)
+			M.GIL_ShowFilterShareMenu(FilterScrollSelect)
 		end
 	)
 
@@ -2226,6 +2333,12 @@ local function CreateUIFrames()
 	Tab2FrameBlock.InfoText:SetJustifyH("CENTER")
 	Tab2FrameBlock.InfoText:SetPoint("TOP", 0, 46)
 	
+	Tab2FrameBlock.hint = Tab2FrameBlock:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	Tab2FrameBlock.hint:SetWidth(150)
+	Tab2FrameBlock.hint:SetJustifyH("RIGHT")
+	Tab2FrameBlock.hint:SetPoint("TOPRIGHT", -2, 54)
+	Tab2FrameBlock.hint:SetText(L["HINT_1"])
+	
 	Tab2FrameBlock:SetScript("OnShow",
 		function(self)
 			M.UpdateBlockButtons()
@@ -2319,7 +2432,7 @@ local function CreateUIFrames()
  
 	-- Plot options on our scrolling slate
 	
-	Tab3Frame.Slate:SetSize(Tab3Frame:GetWidth(), (Tab3Frame:GetHeight() + 120));
+	Tab3Frame.Slate:SetSize(Tab3Frame:GetWidth(), (Tab3Frame:GetHeight() + 300));
 	
 	-- Ignore options
  
@@ -2511,10 +2624,17 @@ local function CreateUIFrames()
 	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.useLFGHacks == true) end)
 	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.useLFGHacks = (self:GetChecked() or false) end) 
 	
+	Button = CreateFrame("CheckButton", "GILFrame3Minimap", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button:SetPoint("TOPLEFT", GILFrame3HackLFG, "BOTTOMLEFT", 0, 4)
+	_G[Button:GetName().."Text"]:SetText(L["OPT_29"])
+	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
+	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.minimapHide ~= true) end)
+	Button:SetScript("OnClick" ,function(self) M.GIL_SetMinimapShown(self:GetChecked() == true) end) 
+
 	-- Strata dropdown
 	
 	Button = Tab3Frame.Slate:CreateFontString("GILFrame3StrataText", "OVERLAY", "GameFontHighlight")
-	Button:SetPoint("TOPLEFT", GILFrame3HackLFG, "BOTTOMLEFT", 6, -4)
+	Button:SetPoint("TOPLEFT", GILFrame3Minimap, "BOTTOMLEFT", 6, -14)
 	Button:SetText(L["OPT_25"])
 	
 	local Drop = CreateFrame("DropdownButton", "GILFrame3StrataMenu", Tab3Frame.Slate, "WowStyle1DropdownTemplate")
@@ -2554,12 +2674,76 @@ local function CreateUIFrames()
 			)
 		end
 	)
+	
+	-- Player Note options (Kill on Sight)
+	
+	Text = Tab3Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+	Text:SetWidth(200)
+	Text:SetPoint("TOPLEFT", GILFrame3StrataText, "BOTTOMLEFT", -18, -24)
+	Text:SetJustifyH("LEFT");
+	Text:SetText(L["NOTE_44"])
+	
+	Button = CreateFrame("CheckButton", "GILFrame3KoSEnable", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 12, -6)
+	_G[Button:GetName().."Text"]:SetText(L["NOTE_12"])
+	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
+	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.kosEnabled ~= false) end)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.kosEnabled = (self:GetChecked() or false) end) 
+	
+	Button = Tab3Frame.Slate:CreateFontString("GILFrame3KoSSoundText", "OVERLAY", "GameFontHighlight")
+	Button:SetPoint("TOPLEFT", GILFrame3KoSEnable, "BOTTOMLEFT", 6, -4)
+	Button:SetText(L["NOTE_13"])
+	
+	local Drop = CreateFrame("DropdownButton", "GILFrame3KoSSoundMenu", Tab3Frame.Slate, "WowStyle1DropdownTemplate")
+	Drop:SetDefaultText(M.GIL_KoSSoundLabel and M.GIL_KoSSoundLabel() or "")
+	Drop:SetPoint("TOPLEFT", GILFrame3KoSSoundText, "TOPRIGHT", 6, 6)
+	Drop:SetWidth(160)
+
+	Drop:SetupMenu(
+		function(self, root)
+			for _, s in ipairs(M.GIL_KoSSounds or {}) do
+				root:CreateButton(s.label,
+					function()
+						GlobalIgnoreDB.kosSoundKey = s.key
+						self:SetDefaultText(M.GIL_KoSSoundLabel())
+						M.GIL_PlayKoSSound(s.key, true)
+					end
+				)
+			end
+		end
+	)
+
+	-- Guild Ignore options
+	
+	Text = Tab3Frame.Slate:CreateFontString("FontString", "OVERLAY", "GameFontNormalLarge")
+	Text:SetWidth(200)
+	Text:SetPoint("TOPLEFT", GILFrame3KoSSoundText, "BOTTOMLEFT", -18, -24)
+	Text:SetJustifyH("LEFT");
+	Text:SetText(L["GUILD_46"])
+	
+	Button = CreateFrame("CheckButton", "GILFrame3GuildEnable", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button:SetPoint("TOPLEFT", Text, "BOTTOMLEFT", 12, -6)
+	_G[Button:GetName().."Text"]:SetText(L["GUILD_19"])
+	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
+	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.guildIgnoreEnabled ~= false) end)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.guildIgnoreEnabled = (self:GetChecked() or false) end) 
+	
+	Button = CreateFrame("CheckButton", "GILFrame3GuildMsg", Tab3Frame.Slate, "UICheckButtonTemplate")	
+	Button:SetPoint("TOPLEFT", GILFrame3GuildEnable, "BOTTOMLEFT", 0, 4)
+	_G[Button:GetName().."Text"]:SetText(L["GUILD_20"])
+	_G[Button:GetName().."Text"]:SetFontObject("GameFontHighlight")
+	Button:SetScript("OnShow",  function(self) self:SetChecked(GlobalIgnoreDB.guildIgnoreMsg ~= false) end)
+	Button:SetScript("OnClick" ,function(self) GlobalIgnoreDB.guildIgnoreMsg = (self:GetChecked() or false) end) 
+
 
 	----------
 	-- SHOW --
 	----------
 	
-	PanelTemplates_SetNumTabs(MainFrame, 3)
+	if M.GIL_BuildNotesTab then M.GIL_BuildNotesTab(MainFrame) end
+	if M.GIL_BuildGuildTab then M.GIL_BuildGuildTab(MainFrame) end
+	
+	PanelTemplates_SetNumTabs(MainFrame, 5)
 	PanelTemplates_SetTab(MainFrame, 1)
 	
 	MainFrame:Show()
@@ -2568,6 +2752,16 @@ end
 ------------------------------
 -- HOOK INTO FRIENDS WINDOW --
 ------------------------------
+
+local function isFriendsFrame()
+	local toc, toc, toc, toc = GetBuildInfo()
+
+	if (V.wowIsRetail == true and toc > 120105) or V.wowIsForever == true then
+		return false
+	end
+	
+	return true
+end
 
 local function friendsShow()
 	
@@ -2584,9 +2778,9 @@ local function friendsShow()
 
 		local anchor, xo, yo
 
-		if _G.SocialUIFrame then
+		if isFriendsFrame() == false then
 			anchor, xo, yo = _G.SocialUIFrame, 46, -10
-		elseif _G.FriendsFrame then
+		else
 			anchor, xo, yo = _G.FriendsFrame, 12, -10
 		end		
 		
@@ -2627,13 +2821,14 @@ end
 -- MAIN --
 ----------
 
-if _G.SocialUIFrame then
+if isFriendsFrame() == false then
 	_G.SocialUIFrame:HookScript("OnShow", friendsShow)
 	_G.SocialUIFrame:HookScript("OnHide", friendsHide)
-elseif _G.FriendsFrame then
+else
 	_G.FriendsFrame:HookScript("OnShow", friendsShow)
 	_G.FriendsFrame:HookScript("OnHide", friendsHide)
 end
+
 --------------------------
 -- HOOK INTO CHAT LINKS --
 --------------------------
@@ -2761,8 +2956,11 @@ function M.GIL_CreateMinimapButton()
 	border:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
 	
 	b:SetScript("OnClick", function(self, button)
-		-- left or right click opens/closes the window, shift + click ignores the target
-		if IsShiftKeyDown() then
+		if IsControlKeyDown() then
+			if not M.GIL_NoteAddUnit("target") then
+				M.GIL_NotesAddDialog()
+			end
+		elseif IsShiftKeyDown() then
 			GILMinimapIgnoreTarget()
 		elseif MainFrame and MainFrame:IsShown() then
 			MainFrame:Hide()
@@ -2793,10 +2991,12 @@ function M.GIL_CreateMinimapButton()
 	b:SetScript("OnEnter", function(self)
 		if self.dragging then return end
 		
+		-- TODO Need to add to localization
 		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 		GameTooltip:AddLine("Global Ignore List")
 		GameTooltip:AddLine("Right or Left Click: Open GUI", 1, 1, 1)
 		GameTooltip:AddLine("Shift-Click: Ignore current target", 1, 1, 1)
+		GameTooltip:AddLine("Ctrl-Click: Add player note", 1, 1, 1)
 		GameTooltip:AddLine("Drag: Move icon", 0.7, 0.7, 0.7)
 		GameTooltip:Show()
 	end)
@@ -2810,17 +3010,34 @@ function M.GIL_CreateMinimapButton()
 	end
 end
 
+-- used by the Options checkbox; also keeps the checkbox in step when /gi minimap is typed
+function M.GIL_SetMinimapShown(show)
+	M.GIL_CreateMinimapButton()
+	
+	if not minimapButton then return end
+	
+	if show then
+		minimapButton:Show()
+		GlobalIgnoreDB.minimapHide = false
+	else
+		minimapButton:Hide()
+		GlobalIgnoreDB.minimapHide = true
+	end
+	
+	if GILFrame3Minimap then
+		GILFrame3Minimap:SetChecked(show == true)
+	end
+end
+
 function M.GIL_ToggleMinimapButton()
 	M.GIL_CreateMinimapButton()
 	
 	if not minimapButton then return end
 	
 	if minimapButton:IsShown() then
-		minimapButton:Hide()
-		GlobalIgnoreDB.minimapHide = true
+		M.GIL_SetMinimapShown(false)
 		M.ShowMsg("Minimap button hidden. Type /gi minimap to show it again")
 	else
-		minimapButton:Show()
-		GlobalIgnoreDB.minimapHide = false
+		M.GIL_SetMinimapShown(true)
 	end
 end

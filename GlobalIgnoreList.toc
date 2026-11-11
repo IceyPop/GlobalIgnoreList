@@ -2,7 +2,7 @@
 ## Title: Global Ignore List
 ## Notes: Maintain ignore list across all characters, filter chat spam and more
 ## Author: IceyPop
-## Version: 12.1.7.3
+## Version: 12.1.7.4
 ## Category: Chat & Communication
 ## IconTexture: Interface\Icons\ui_chat
 ## SavedVariables: GlobalIgnoreDB
@@ -13,5 +13,8 @@ GIL_InputScrollFrameTemplate.xml
 GIL_Localization.lua
 GIL_Globals.lua
 GIL_UI.lua
+GIL_Share.lua
+GIL_Notes.lua
+GIL_Guild.lua
 GIL_BlizzardUI.lua
 GlobalIgnoreList.lua
