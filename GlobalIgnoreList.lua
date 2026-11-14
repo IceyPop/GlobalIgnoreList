@@ -724,13 +724,15 @@ function M.SyncIgnoreList (silent)
 						ignoreCount = ignoreCount + 1
 						
 						setSyncValue(name, key)
-						
-						--name = M.removeServer(name)
+
+						if V.wowIsForever == true then
+							name = M.removeServer(name)
+						end
 
 						if not silent then
 							M.ShowMsg (format(L["SYNC_2"], name))
 						end					
-								
+
 						BlizzardAddIgnore(name)
 					end
 				end
@@ -1905,6 +1907,8 @@ end
 --local lastMsg = ""
 
 local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5, chNumber, chName, t8, msgID, t10, t11, t12, ...)
+
+	if issecretvalue and (issecretvalue(message) or issecretvalue(from)) then return false end
 	
 --	print("DEBUG"..
 --		"\n\tFrom: "..(from or "nil")..

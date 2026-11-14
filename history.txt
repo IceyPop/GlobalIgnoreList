@@ -1,5 +1,17 @@
 => VERSION HISTORY
 
+=> 12.1.7.5
+
+Fixed a bug in ignore sync to Blizzard ignore system in Forever
+
+Added "Add Ignore" button to the Ignore tab to make it consistent with the other tabs
+
+Changed default labels of the add/remove buttons in the player notes tab
+
+Fixed an issue with some secret messages causing LUA crashes (thanks to JPEscher and XaksFlaX for reporting)
+
+When scanning larger guilds and breaking scans into level ranges, the Guild Ignore system wasn't using the current expansions level cap in some cases (I had some placeholder stuff left in from when I was building it).  It should now properly cycle through each expansions level ranges.
+
 => 12.1.7.4
 
 I decided to merge a new addon I was working on into GIL and this is by far the largest two updates I have ever done:

@@ -366,12 +366,21 @@ end)
 local WHO_MAX      = 50
 local WHO_TIMEOUT  = 10
 local WHO_COOLDOWN = 5
-local BAND_SIZE    = 10
-local BAND_LAST    = (V.wowIsForever == true) and 60 or 100
+local BAND_SIZE    = 10		-- level bands start at 1, 11, 21 and the last one stops at V.wowLevelCap
+
+local function NextBand (band)
+	local nextBand = band + BAND_SIZE
+
+	return (nextBand <= V.wowLevelCap) and nextBand or nil
+end
+
+local function BandEnd (band)
+	return math.min(band + BAND_SIZE - 1, V.wowLevelCap)
+end
 
 local scanPending = nil
 local scanLastAt  = 0
-local scanBand    = {}		-- guildKey -> next level band start (nil = full guild query)
+local scanBand    = {}
 
 local function HideWhoFrame (wasShown)
 	if not wasShown and FriendsFrame and FriendsFrame:IsShown() then
@@ -426,21 +435,21 @@ FinishScan = function (timedOut)
 
 	local range = ""
 
-	if p.band then range = format(L["GUILD_45"], p.band, p.band + BAND_SIZE - 1) end
+	if p.band then range = format(L["GUILD_45"], p.band, BandEnd(p.band)) end
 
 	M.ShowMsg(format(L["GUILD_39"], g.name, range, found, added))
 
 	if num >= WHO_MAX then
 		-- the answer was cut off: next click looks at the next level range
 		if p.band then
-			scanBand[p.gkey] = (p.band + BAND_SIZE <= BAND_LAST) and (p.band + BAND_SIZE) or nil
+			scanBand[p.gkey] = NextBand(p.band)
 		else
 			scanBand[p.gkey] = 1
 		end
 
 		M.ShowMsg(L["GUILD_40"])
 	elseif p.band then
-		scanBand[p.gkey] = (p.band + BAND_SIZE <= BAND_LAST) and (p.band + BAND_SIZE) or nil
+		scanBand[p.gkey] = NextBand(p.band)
 	else
 		scanBand[p.gkey] = nil
 	end
@@ -471,7 +480,7 @@ function M.GIL_GuildScan (gkey)
 	local band  = scanBand[gkey]
 	local query = 'g-"' .. string.gsub(g.name, '"', "") .. '"'
 
-	if band then query = query .. " " .. band .. "-" .. (band + BAND_SIZE - 1) end
+	if band then query = query .. " " .. band .. "-" .. BandEnd(band) end
 
 	scanPending = {
 		gkey     = gkey,

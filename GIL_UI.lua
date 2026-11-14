@@ -1956,6 +1956,32 @@ local function CreateUIFrames()
 	Button2:SetPoint("RIGHT", "GILFrame1IgnoreButton", "LEFT", 0, 0)	
 	Button2:SetScript("OnClick", function(self) M.GIL_ShowPrune() end)
 	
+	local ButtonAdd = CreateFrame("Button", "GILFrame1AddButton", Tab1Frame, "UIPanelButtonTemplate")
+	
+	ButtonAdd:SetSize(110, 22)
+	ButtonAdd:SetText(L["BUT_14"])
+	ButtonAdd:SetPoint("BOTTOMRIGHT", -1, -24)
+
+	Button1:ClearAllPoints()
+	Button1:SetPoint("RIGHT", ButtonAdd, "LEFT", 0, 0)
+	Button2:ClearAllPoints()
+	Button2:SetPoint("RIGHT", Button1, "LEFT", 0, 0)
+	ButtonAdd:SetScript("OnClick",
+		function(self)
+			M.GIL_ShowDialog({
+				key        = "ignoreadd",
+				text       = "|cffffff00%s|cffffffff\n\n" .. L["ADD_5"],
+				editBox    = true,
+				editText   = "",
+				maxLetters = 80,
+				button1    = L["NOTE_3"],
+				button2    = L["BOX_5"],
+				onAccept   = function (text)
+					if M.trim(text or "") ~= "" then M.ignoreFromCmd(text) end
+				end,
+			}, L["BUT_14"])
+		end)
+	
 	local Button3 = CreateFrame("Button", "GILFrame1ShareButton", Tab1Frame, "UIPanelButtonTemplate")
 	
 	Button3:SetSize(110, 22)
