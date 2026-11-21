@@ -8,9 +8,9 @@ Added "Add Ignore" button to the Ignore tab to make it consistent with the other
 
 Changed default labels of the add/remove buttons in the player notes tab
 
-Fixed an issue with some secret messages causing LUA crashes (thanks to JPEscher and XaksFlaX for reporting)
+Fixed an issue with some secret messages causing LUA crashes (thanks to JPEscher and Aslam for reporting)
 
-When scanning larger guilds and breaking scans into level ranges, the Guild Ignore system wasn't using the current expansions level cap in some cases (I had some placeholder stuff left in from when I was building it).  It should now properly cycle through each expansions level ranges.
+Changed the way the timing works for the ignore list synchronization on login
 
 => 12.1.7.4
 

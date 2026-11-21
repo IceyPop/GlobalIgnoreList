@@ -410,7 +410,17 @@ function M.addServer (name)
 
 	if not name then return nil end
 
-	if string.find(name, "-", 1, true) == nil then
+	local index = string.find(name, "-", 1, true)
+
+	if V.wowIsForever == true then
+		if index ~= nil then
+			name = string.sub(name, 1, index - 1)
+		end
+
+		return name .. "-" .. V.serverName
+	end
+
+	if index == nil then
 		return name .. "-" .. V.serverName
 	end
 	
@@ -513,5 +523,21 @@ elseif (toc >= 120000 and toc < 129999) then
 end
 
 V.wowIsClassic	= (V.wowIsRetail == false and V.wowIsForever == false)
-V.serverName	= M.Proper(GetRealmName(), false)
-V.playerName	= M.addServer(M.GetUnitFullName("player") or GetUnitName("player"))
+
+-- Set the server name, caluclated for Forever with region
+
+if V.wowIsForever == true then
+	local region = GetCurrentRegionName and GetCurrentRegionName()
+
+	if type(region) ~= "string" or region == "" then
+		local regionNames = { "US", "KR", "EU", "TW", "CN" }
+
+		region = regionNames[GetCurrentRegion and GetCurrentRegion() or 0] or "XX"
+	end
+
+	V.serverName = M.Proper("Forever(" .. region .. ")", false)
+else
+	V.serverName = M.Proper(GetRealmName(), false)
+end
+
+V.playerName = M.addServer(M.GetUnitFullName("player") or GetUnitName("player"))

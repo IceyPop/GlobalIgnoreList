@@ -11,11 +11,15 @@ V.GIL_Loaded			= false
 V.GIL_SyncOK			= false
 V.GIL_SyncTried			= false
 V.GIL_InSync			= false
+V.GIL_StartupCalled		= false
+V.GIL_TimerDone			= false
 V.lastFilterError		= false
 
 local GILFRAME			= nil
 local gotLoaded			= false
 local gotUpdate			= false
+local startupArmed		= false
+local STARTUP_DELAY		= 10 -- Seconds after login before the first sync
 local gotEntering		= false
 local safeToLoad		= false
 local doLoginIgnore		= true
@@ -27,7 +31,6 @@ local maxFilterBlocked	= 50
 local firstClear		= false
 local firstPrune		= false
 local pruneDays			= 0
-local timer				  = 0
 local loadedTime		= GetTime()
 local lastSentIgnore	= ""
 local lastFilterMsgID	= -1
@@ -58,9 +61,9 @@ local BlizzardInviteUnit		= nil
 ----------------------------------
 
 function M.debugMsg (msg)
---	if GlobalIgnoreDB.showIgnoreDebug == true then
-		--print("|cffffff00Global Ignore: " .. msg)
---	end
+	--if GlobalIgnoreDB.showIgnoreDebug == true then
+	--	print("|cffffff00Global Ignore DEBUG: " .. msg)
+	--end
 end
 
 function M.ShowMsg (msg)
@@ -149,7 +152,6 @@ local function AddToList(newname, newfaction, newnote, newtype)
 	M.GIL_LFG_Refresh()
 end
 
--- used by the share/import feature (GIL_Share.lua); keeps date and expiration of exported entries
 function M.GIL_ImportEntry (name, faction, date, note, exp, entryType)
 
 	AddToList(name, faction, note, entryType)
@@ -294,10 +296,8 @@ local function hasIgnored (name)
 	name = M.Proper(M.addServer(name))
 		
 	for count = 1, C_FriendList.GetNumIgnores() do
-	
 		if name == M.Proper(M.addServer(C_FriendList.GetIgnoreName(count))) then
 			result = count
-			
 			break
 		end
 	end
@@ -551,16 +551,25 @@ end
 
 function M.SyncIgnoreList (silent)
 
+	if V.GIL_InSync == true then return end
+	if C_FriendList == nil or C_FriendList.GetNumIgnores() == nil then return end
+
 	if silent == nil then
 		silent = false
 	end
 	
-	M.ShowMsg(L["LOAD_4"])	
+	-- Temporarily force silence in Forever because Blizzard ignore list is resetting every login (at least for me)
+	
+	if V.wowIsForever == true then
+		silent = true
+	end
 	
 	if isValidList() == false then
 		M.debugMsg ("Invalid ignore list")	
 		return
 	end
+	
+	M.ShowMsg(L["LOAD_4"])
 	
 	V.GIL_InSync = true
 	
@@ -601,8 +610,6 @@ function M.SyncIgnoreList (silent)
 				end
 			end				
 		end
-		
-		GlobalIgnoreImported = true
 	end	
 	
 	-- first remove expired entries and fix any detected broken entries
@@ -616,13 +623,23 @@ function M.SyncIgnoreList (silent)
 		if tmp == "" then
 			M.debugMsg ("Blank character name found in position " .. count);
 			RemoveFromList(count)
-		end
+		else
+			local exp   = GlobalIgnoreDB.expList[count] or 0
+			local added = M.dateToJulianDate(GlobalIgnoreDB.dateList[count])
+			local today = M.dateToJulianDate(date("%d %b %Y"))
+			
+			if exp > 0 and added > 0 and added <= today and (today - added) >= exp then
+				local before = GlobalIgnoreDB.ignoreList[count]
+				M.debugMsg ("Removing character "..(before or "nil").." due to expiration date")
+				
+				C_FriendList.DelIgnore(M.addServer(before))
 		
-		if GlobalIgnoreDB.expList[count] > 0 and M.daysFromToday(GlobalIgnoreDB.dateList[count]) >= GlobalIgnoreDB.expList[count] then
-			local name = M.addServer(GlobalIgnoreDB.ignoreList[count])
-			M.debugMsg ("Removing character "..(name or "nil").." due to expiration date")
-			C_FriendList.DelIgnore(name)
-			count = 0
+				if GlobalIgnoreDB.ignoreList[count] == before then
+					RemoveFromList(count)
+				end
+				
+				count = 0
+			end
 		end
 	end
 	
@@ -677,26 +694,6 @@ function M.SyncIgnoreList (silent)
 		end
 	end
 	
-	if GlobalIgnoreDB.trackChanges == true then
-		local listCount = 0
-		
-		while GlobalIgnoreDB.ignoreList[listCount] do
-		
-			if GlobalIgnoreDB.typeList[listCount] == "player" then
-			
-				local tries = getSyncValue(listCount)
-
-				if tries >= maxSyncTries then
-					M.debugMsg ("Removing "..GlobalIgnoreDB.ignoreList[listCount].." after "..tries.." failed attempts to add to ignore list")
-					C_FriendList.DelIgnore(M.removeServer(GlobalIgnoreDB.ignoreList[listCount]))
-					listCount = listCount - 1				
-				end
-			end
-			
-			listCount = listCount + 1
-		end	
-	end
-
 	-- move qualified players to account wide ignore if there is room for it
 
 	local ignoreCount = C_FriendList.GetNumIgnores()
@@ -705,36 +702,43 @@ function M.SyncIgnoreList (silent)
 
 		M.debugMsg("Moving characters from GIL to Ignore")
 
-		for key,value in pairs(GlobalIgnoreDB.ignoreList) do
-		
-			if GlobalIgnoreDB.typeList[key] == "player" then
-		
-				local name = M.Proper(M.addServer(value))
-				
-				--print("DEBUG processing: ".. name .. " ignored? ".. hasIgnored(name));
-				
-				if hasIgnored(name) == 0 then
-					local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
-
-					if ok then
-						ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false or V.wowIsForever == true)
-					end
+		-- Pass 1: Add entries that have not repeatedly failed to reach the Blizzard list
+		-- Pass 2: Retry the failed (3+ fails ie mistype name maybe?) only when slots are still free
+	
+		for pass = 1, 2 do
+			for key,value in pairs(GlobalIgnoreDB.ignoreList) do
+			
+				if GlobalIgnoreDB.typeList[key] == "player" and ((getSyncValue(key) >= maxSyncTries) == (pass == 2)) then
+			
+					local name = M.Proper(M.addServer(value))
 					
-					if ok then
-						ignoreCount = ignoreCount + 1
-						
-						setSyncValue(name, key)
-
-						if V.wowIsForever == true then
-							name = M.removeServer(name)
+					if hasIgnored(name) == 0 then
+						local ok = (GlobalIgnoreDB.factionList[key] == faction) or (GlobalIgnoreDB.samefaction == false)
+	
+						if ok then
+							ok = (isServerMatch(V.serverName, M.getServer(name))) or (GlobalIgnoreDB.sameserver == false or V.wowIsForever == true)
 						end
-
-						if not silent then
-							M.ShowMsg (format(L["SYNC_2"], name))
-						end					
-
-						BlizzardAddIgnore(name)
+						
+						if ok then
+							ignoreCount = ignoreCount + 1
+							
+							setSyncValue(name, key)
+	
+							if V.wowIsForever == true then
+								name = M.removeServer(name)
+							end
+	
+							if not silent then
+								M.ShowMsg (format(L["SYNC_2"], name))
+							end					
+	
+							BlizzardAddIgnore(name)
+						end
 					end
+				end
+				
+				if ignoreCount >= maxIgnoreSize then
+					break
 				end
 			end
 			
@@ -743,6 +747,8 @@ function M.SyncIgnoreList (silent)
 			end
 		end
 	end	
+
+	GlobalIgnoreImported = true
 
 	V.GIL_InSync = false
 	V.GIL_SyncOK = true
@@ -785,11 +791,13 @@ function M.PruneIgnoreList (days, doit)
 end
 
 local function ApplicationStartup(self)
-
-	if V.GIL_Loaded == true or safeToLoad == false then
+	
+	if V.GIL_Loaded == true or safeToLoad == false or V.GIL_StartupCalled == true then
 		return
 	end
-			
+	
+	V.GIL_StartupCalled = true
+	
 	M.ShowMsg(L["LOAD_1"])
 
 	-- Set filter defaults
@@ -1019,6 +1027,19 @@ local function ApplicationStartup(self)
 		end
 	end
 	
+	-- Revision 2: Forever names end in the region server ("Forever(US)") instead of the game's realm text
+	if (GlobalIgnoreDB.revision or 0) < 2 then
+		if V.wowIsForever == true then
+			for count = 1, #GlobalIgnoreDB.ignoreList do
+				if (GlobalIgnoreDB.typeList[count] or "player") == "player" then
+					GlobalIgnoreDB.ignoreList[count] = M.Proper(M.addServer(GlobalIgnoreDB.ignoreList[count]))
+				end
+			end
+		end
+
+		GlobalIgnoreDB.revision = 2
+	end
+	
 	if GlobalIgnoreDB.filterActive == nil then
 		GlobalIgnoreDB.filterActive = {}
 		
@@ -1064,10 +1085,7 @@ local function ApplicationStartup(self)
 
 	loadedTime = GetTime()
 		
-	M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
-		
-	V.GIL_Loaded = true
-	
+	V.GIL_Loaded = true	
 	M.GIL_HookFunctions()
 	
 	if M.GIL_CreateMinimapButton then M.GIL_CreateMinimapButton() end
@@ -1141,7 +1159,7 @@ local function EventHandler (self, event, sender, ...)
 		gotEntering = true
 	end
 
-	if event == "GROUP_ROSTER_UPDATE" then
+	if event == "GROUP_ROSTER_UPDATE" and V.GIL_Loaded == true then
 		if gotGroup == true and not IsInGroup() then
 			gotGroup     = false
 			groupWarning = {}
@@ -1234,33 +1252,29 @@ local function EventHandler (self, event, sender, ...)
 		return
 	end
 
-	if gotLoaded == true and gotEntering == true then
-		if safeToLoad ~= true and gotUpdate ~= true then
-		
-			timer = 0
-		
-			self:SetScript("OnUpdate", function(Self, elapsed)
-			
-				timer = timer + elapsed
-							
-				if timer < 5 then
-					return
-				end
-												
-				self:SetScript("OnUpdate", nil)
-				self:Hide()
-				
-				safeToLoad = true			
-			end)
-			
-		end
-
+	if gotLoaded == true and gotEntering == true and V.GIL_StartupCalled == false then
 		safeToLoad = true
-	end	
-
-	if safeToLoad == true then
-		ApplicationStartup(self)
+		ApplicationStartup(GILFRAME)
 	end
+
+	if V.GIL_StartupCalled == true and startupArmed == false then
+		startupArmed = true
+
+		--C_FriendList.ShowFriends()   -- I was hoping this could trigger list loading but unsure as Forever is currently VERY bugged
+		-- In general, this all still needs some work and cleanup
+		
+		C_Timer.After(STARTUP_DELAY, function ()
+			V.GIL_TimerDone = true
+			M.GIL_TrySync()
+		end)
+	end
+end
+
+function M.GIL_TrySync (fromWindow)
+	if V.GIL_Loaded ~= true or V.GIL_SyncOK == true or V.GIL_InSync == true then return end
+	if fromWindow == true and V.GIL_TimerDone ~= true then return end
+
+	M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
 end
 
 ------------------------
@@ -2003,13 +2017,7 @@ local function chatMessageFilter (self, event, message, from, t1, t2, t3, t4, t5
 		return false
 
 	elseif (from ~= nil) and (from ~= "") then
-		local idx = string.find(from, "-", 1, true)
-		
-		if idx == nil then
-			from = M.Proper(from .. "-" .. V.serverName)
-		else
-			from = M.Proper(string.sub(from, 1, idx - 1) .. "-" ..string.sub(from, idx + 1, string.len(from)))
-		end
+		from = M.Proper(M.addServer(from))
 				
 		if M.hasGlobalIgnored(from) > 0 or M.hasGuildIgnored(from) or hasServerIgnored(M.getServer(from)) > 0 then
 			

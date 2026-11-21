@@ -88,7 +88,7 @@ local function CleanName (text)
 	if #text > NAME_MAX then
 		text = sub(text, 1, NAME_MAX)
 
-		while #text > 0 do						-- no half UTF-8 characters
+		while #text > 0 do -- no half UTF-8 characters
 			local b = string.byte(text, #text)
 
 			if b >= 128 and b < 192 then
@@ -366,7 +366,7 @@ end)
 local WHO_MAX      = 50
 local WHO_TIMEOUT  = 10
 local WHO_COOLDOWN = 5
-local BAND_SIZE    = 10		-- level bands start at 1, 11, 21 and the last one stops at V.wowLevelCap
+local BAND_SIZE    = 10	-- level bands start at 1, 11, 21 and the last one stops at V.wowLevelCap
 
 local function NextBand (band)
 	local nextBand = band + BAND_SIZE
@@ -380,7 +380,7 @@ end
 
 local scanPending = nil
 local scanLastAt  = 0
-local scanBand    = {}
+local scanBand    = {}		-- guildKey -> next level band start (nil = full guild query)
 
 local function HideWhoFrame (wasShown)
 	if not wasShown and FriendsFrame and FriendsFrame:IsShown() then

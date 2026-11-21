@@ -1778,9 +1778,7 @@ local function CreateUIFrames()
 		
 	MainFrame:SetScript("OnShow",
 		function (self)
-			if V.GIL_SyncOK == false then
-				M.SyncIgnoreList(GlobalIgnoreDB.chatmsg == false)
-			end
+			M.GIL_TrySync(true)
 		end)
 
 	local icon = MainFrame:CreateTexture("$parentIcon", "OVERLAY", nil, -8)
