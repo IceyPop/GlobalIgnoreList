@@ -8,9 +8,13 @@ Added "Add Ignore" button to the Ignore tab to make it consistent with the other
 
 Changed default labels of the add/remove buttons in the player notes tab
 
-Fixed an issue with some secret messages causing LUA crashes (thanks to JPEscher and Aslam for reporting)
+Fixed an issue with some secret messages causing LUA crashes (thanks to JPEscher and XaksFlaX for reporting)
 
 Changed the way the timing works for the ignore list synchronization on login
+
+Changed the way Forever tracks server data which the old way was leading to some LUA errors when dealing with groups and in some other places as well
+
+IMPORTANT NOTE: My Forever client seems to be deleting its Blizzard Ignore list every single login.  This results in GIL reloading the ignore list every single time a player logs in on every character, and if "Show ignore messages during sync" is turned on, it spams your chat during login with ignore messages.  This is reproducible for me with zero addons and seems like a pretty major bug Blizzard needs to address.  So until Blizzard fixes this, I am hard coding the addon to disable sending those messages during sync in Forever.
 
 => 12.1.7.4
 
