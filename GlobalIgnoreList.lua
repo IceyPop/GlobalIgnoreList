@@ -852,7 +852,12 @@ local function ApplicationStartup(self)
 	filterDefFilter[#filterDefFilter + 1] = "[contains=trump] or [contains=communist] or [contains=communism] or [word=president] or [contains=biden] or [word=hillary] or [word=hilary] or [contains=democrat] or [contains=republican] or [contains=liberals] or [word=maga] or [word=libs] or [contains=conservatives] or [contains=libtard] or [word=pelosi] or [word=epstein] or [word=AOC] or [word=putin] or [contains=right\\ wing] or [word=dems] or [word=socialism]"
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0012"
-	
+
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Cyrillic"
+	filterDefFilter[#filterDefFilter + 1] = "[cyrillic]"
+	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0015"
+
 	-- When adding new defaults, make sure to assign a unique filter ID that has never been used before
 
 	faction = UnitFactionGroup("player")
@@ -1800,6 +1805,12 @@ function M.filterComplex (filterStr, chatStr, chNumber, chName)
 								
 						elseif token == "[nonlatin]" then
 							if strfind(chatStr, "[\227-\237]") then
+								result = result .. "T"
+							else
+								result = result .. "F"
+							end
+						elseif token == "[cyrillic]" then
+							if strfind(chatStr, "[\208-\211][\128-\191]") or strfind(chatStr, "\212[\128-\175]") then
 								result = result .. "T"
 							else
 								result = result .. "F"

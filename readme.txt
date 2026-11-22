@@ -150,6 +150,10 @@ This tag allows filters messages that contain Chinese/Japanese/Korean characters
 for those who play on English servers that have a strong native Asian speaking
 community
 
+**[cyrillic]**
+
+This tag allows filters to block messages that contain Cyrillic characters.
+
 **[words]**
 
 This tag allows filters to test that a line of text contains only a specific number
