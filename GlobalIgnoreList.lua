@@ -44,6 +44,7 @@ local needPartyClose	= false
 local gotGroup          = IsInGroup()
 local partyNameUI		= ""
 local groupWarning      = {}
+local groupSource		= {}
 local MSG_LOGOFF		= ERR_FRIEND_OFFLINE_S:gsub("%%s", ".+")
 local MSG_LOGON			= ERR_FRIEND_ONLINE_SS:gsub("|Hplayer:%%s|h%[%%s%]|h", "|Hplayer:.+|h%%[.+%%]|h")
 local filterLoginMsgs   = true
@@ -833,17 +834,12 @@ local function ApplicationStartup(self)
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0008"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Community Recruitment"
-	filterDefFilter[#filterDefFilter + 1] = "[community]"
-	filterDefActive[#filterDefActive + 1] = false
-	filterDefID[#filterDefID + 1]     = "GIL0009"
-
 	filterDefDesc[#filterDefDesc + 1]     = "Filter WTS"
 	filterDefFilter[#filterDefFilter + 1] = "[contains=WTS] or [contains=WTB]"
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0010"
 
-	filterDefDesc[#filterDefDesc + 1]     = "Filter Chinese/Korean/Japanese"
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Non-Latin Text (Chinese/Japanese/Korean/Cyrillic/Greek/Arabic/Hebrew/Thai/Indic)"
 	filterDefFilter[#filterDefFilter + 1] = "[nonlatin]"
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0011"
@@ -853,6 +849,11 @@ local function ApplicationStartup(self)
 	filterDefActive[#filterDefActive + 1] = false
 	filterDefID[#filterDefID + 1]     = "GIL0012"
 	
+	filterDefDesc[#filterDefDesc + 1]     = "Filter Portal/Summon Trading"
+	filterDefFilter[#filterDefFilter + 1] = "([word=WTS] or [contains=sell] or [word=WTB] or [contains=tip] or [contains=porting]) and ([contains=summon] or [contains=port])"
+	filterDefActive[#filterDefActive + 1] = false
+	filterDefID[#filterDefID + 1]     = "GIL0015"
+
 	-- When adding new defaults, make sure to assign a unique filter ID that has never been used before
 
 	faction = UnitFactionGroup("player")
@@ -1163,12 +1164,14 @@ local function EventHandler (self, event, sender, ...)
 		if gotGroup == true and not IsInGroup() then
 			gotGroup     = false
 			groupWarning = {}
+			groupSource  = {}
 		elseif gotGroup == false and IsInGroup() then
 			gotGroup = true			
 		elseif gotGroup == true then
 			local prefix  = IsInRaid() and "raid" or "party"
 			local name    = ""
 			local doWarn  = false
+			local doType  = 0
 			
 			for count = 1, GetNumGroupMembers() do	
 				name = (V.wowIsForever == true) and M.GetUnitFullName(prefix..count) or GetUnitName(prefix..count, true)
@@ -1176,9 +1179,16 @@ local function EventHandler (self, event, sender, ...)
 				if name then
 					name = M.Proper(M.addServer(name))
 					
-					if (M.hasGlobalIgnored(name) > 0 or M.hasGuildIgnored(name)) and M.hasGroupWarning(name) == 0 then
-						doWarn = true
-						groupWarning[#groupWarning + 1] = name
+					if M.hasGroupWarning(name) == 0 then
+						if M.hasGlobalIgnored(name) > 0 then
+							doWarn = true
+							groupWarning[#groupWarning + 1]	= name
+							groupSource[#groupSource + 1]	= "Ignore"
+						elseif M.hasGuildIgnored(name) then
+							doWarn = true
+							groupWarning[#groupWarning + 1]	= name
+							groupSource[#groupSource + 1]	= "Guild: " .. M.GetPlayerGuild(name)
+						end
 					end
 				end
 			end
@@ -1187,7 +1197,7 @@ local function EventHandler (self, event, sender, ...)
 				local nameList = ""
 				
 				for count = 1, #groupWarning do
-					nameList = nameList .. "\n" .. groupWarning[count]
+					nameList = nameList .. "\n" .. groupWarning[count] + " (" + groupSource[count] + ")"
 				end
 				
 				M.ShowMsg(format(L["CHAT_1"], #groupWarning, nameList))

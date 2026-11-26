@@ -1031,7 +1031,7 @@ function M.GIL_BuildNotesTab (MainFrame)
 	local noteBox = CreateFrame("ScrollFrame", "GILFrameNotesEditNote", Edit, "InputScrollFrameTemplate")
 	noteBox:SetPoint("TOPLEFT", noteLabel, "BOTTOMLEFT", 6, -8)
 	noteBox:SetSize(618, 130)
-	noteBox.EditBox:SetAutoFocus(false)
+	noteBox.EditBox:SetAutoFocus(true)
 	noteBox.EditBox:SetMaxLetters(NOTE_MAX)
 	noteBox.EditBox:SetWidth(570)
 	noteBox.EditBox:SetFontObject("ChatFontNormal")
@@ -1110,7 +1110,6 @@ function M.GIL_BuildNotesTab (MainFrame)
 		editFaction = entry.faction or "Unknown"
 		UpdateFactionButton()
 		noteBox.EditBox:SetText(entry.note or "")
-		noteBox.EditBox:SetCursorPosition(0)
 
 		ShowState()
 	end

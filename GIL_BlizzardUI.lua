@@ -117,14 +117,35 @@ function M.GIL_IsGamepadActive()
 	return false
 end
 
+local function GetMenuName (contextData)
+	local name, server = contextData.name, contextData.server
+
+	if type(name) ~= "string" or name == "" then return nil end
+	if issecretvalue and (issecretvalue(name) or issecretvalue(server)) then return nil end
+
+	if type(server) == "string" and server ~= "" and not string.find(name, "-", 1, true) then
+		name = name .. "-" .. server
+	end
+
+	return name
+end
+
 function M.GIL_UnitMenuPlayer (owner, root, contextData)
 	if M.GIL_IsGamepadActive() then return end
-	if not contextData or not contextData.unit then return end
+	if not contextData then return end
 
-	local unit = contextData.unit
-	if not UnitExists(unit) or not UnitIsPlayer(unit) then return end
+	local unit   = contextData.unit
+	local lineID = contextData.lineID
+	local target
 
-	local target = M.GetUnitFullName(unit)
+	if unit then
+		if not UnitExists(unit) or not UnitIsPlayer(unit) then return end
+
+		target = M.GetUnitFullName(unit)
+	else
+		target = GetMenuName(contextData)
+	end
+
 	if not target then return end
 
 	target = M.Proper(M.addServer(target), true)
@@ -138,6 +159,7 @@ function M.GIL_UnitMenuPlayer (owner, root, contextData)
 	end
 
 	root:CreateDivider()
+	root:CreateTitle("Global Ignore Menu")
 	root:CreateButton(text,
 		function(owner, root, contextData)
 			C_FriendList.AddOrDelIgnore(M.addServer(target))
@@ -150,7 +172,30 @@ function M.GIL_UnitMenuPlayer (owner, root, contextData)
 			end
 		end)
 
-	if M.GIL_GuildMenuUnit then
+	if lineID then
+		root:CreateButton(L["BUT_15"],
+			function(owner, root, contextData)
+				local text = C_ChatInfo.GetChatLineText(lineID)
+
+				if type(text) == "string" and not (issecretvalue and issecretvalue(text)) then
+					local f = M.GIL_ShowDialog({
+						key        = "chatcopy",
+						text       = L["BUT_16"],
+						editBox    = true,
+						editText   = (string.gsub(text, "|", "||")), -- show escape codes literally
+						maxLetters = 0,
+						button1    = OKAY,
+					})
+
+					if f and f.edit then
+						f.edit:SetFocus()
+						f.edit:HighlightText()
+					end
+				end
+			end)
+	end
+
+	if unit and M.GIL_GuildMenuUnit then
 		M.GIL_GuildMenuUnit(root, unit)
 	end
 end
@@ -191,5 +236,6 @@ function M.GIL_HookFunctions()
 		Menu.ModifyMenu("MENU_UNIT_PLAYER", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_PARTY", M.GIL_UnitMenuPlayer)
 		Menu.ModifyMenu("MENU_UNIT_RAID_PLAYER", M.GIL_UnitMenuPlayer)
+		Menu.ModifyMenu("MENU_UNIT_FRIEND", M.GIL_UnitMenuPlayer)
 	end
 end

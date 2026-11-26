@@ -197,6 +197,13 @@ local function GuildLabel (g)
 	return g.name .. " (" .. (M.prettyServer(g.server) or g.server) .. ")"
 end
 
+function M.GetPlayerGuild (name)
+	local c    = GlobalIgnoreDB and GlobalIgnoreDB.guildIgnore
+	local gkey = c and c.players and name and c.players[name]
+	local g    = gkey and c.guilds and c.guilds[gkey]
+
+	return g and GuildLabel(g) or nil
+end
 ---------------
 -- DISCOVERY --
 ---------------
@@ -494,7 +501,7 @@ function M.GIL_GuildScan (gkey)
 
 	scanLastAt = GetTime()
 
-	pcall(C_FriendList.SetWhoToUi, true)			-- results come as an event, not chat lines
+	pcall(C_FriendList.SetWhoToUi, true)
 	pcall(eventFrame.RegisterEvent, eventFrame, "WHO_LIST_UPDATE")
 
 	local ok = pcall(C_FriendList.SendWho, query)
@@ -509,6 +516,8 @@ function M.GIL_GuildScan (gkey)
 	C_Timer.After(WHO_TIMEOUT, function ()
 		if scanPending == pending then FinishScan(true) end
 	end)
+
+	if M.GIL_GuildScanStarted then M.GIL_GuildScanStarted(WHO_COOLDOWN) end
 end
 
 -----------------------
@@ -1315,13 +1324,38 @@ function M.GIL_BuildGuildTab (MainFrame)
 	shareButton:SetText(L["BUT_12"])
 	shareButton:SetPoint("BOTTOMLEFT", -1, -24)
 
-	scanButton = CreateFrame("Button", "GILFrameGuildScan", ListFrame, "UIPanelButtonTemplate")
+	scanButton = CreateFrame("Button", "GILFrameGuildScan", ListFrame, "")
 	scanButton:SetSize(140, 22)
 	scanButton:SetText(L["GUILD_37"])
 	scanButton:SetPoint("LEFT", shareButton, "RIGHT", 4, 0)
 	scanButton:SetScript("OnClick", function ()
 		M.GIL_GuildScan((state == 1 and viewGuild) or (state == 0 and view[selected]) or nil)
 	end)
+
+	-- Gray out the button after a scan and count the seconds down to 1, then restore
+
+	local scanCountId = 0
+
+	local function ScanCountdown (left, id)
+		if id ~= scanCountId then return end
+
+		if left <= 0 then
+			scanButton:SetText(L["GUILD_37"])
+			scanButton:Enable()
+			return
+		end
+
+		scanButton:SetText(tostring(left))
+
+		C_Timer.After(1, function () ScanCountdown(left - 1, id) end)
+	end
+
+	function M.GIL_GuildScanStarted (seconds)
+		scanCountId = scanCountId + 1
+
+		scanButton:Disable()
+		ScanCountdown(seconds, scanCountId)
+	end
 
 	excludedButton = CreateFrame("Button", "GILFrameGuildExcluded", ListFrame, "UIPanelButtonTemplate")
 	excludedButton:SetSize(110, 22)

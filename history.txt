@@ -1,5 +1,21 @@
 => VERSION HISTORY
 
+=> 12.1.7.6
+
+The "Scan for members" button in the Guild Ignore tab now goes on "cooldown" for 5 seconds similar to a WoW spell when activated.  Blizzard currently restricts how much the scans can be done (and they cannot be automated) which is why this button exists at all.
+
+Cleaned up right click unit menu and it should now properly add Ignore/Note options when right clicking names in chat again
+
+When you get placed into a group with an ignored person, the source of the person is now listed alongside their name in the warning dialog.  In other words if they are on your ignore list it will say so, or if they are ignored through a guild ignore it will tell you the guild name.  I had difficulty getting help to test this so please let me know if it is not working!
+
+Update the [nonlatin] tag to expand on what it filters: Chinese/Japanese/Korean/Cyrillic/Greek/Arabic/Hebrew/Thai/Indic.  Previously it was only filtering Chinese/Japanese/Korean.
+
+Added new default chat filter for Portal/Summoning buying/selling and removed the default filter for community recruitment
+
+Editing a player note should now default the active input focus to the note window
+
+The right click on a chat text now has a "Copy raw chat text" option which can be used when debugging chat filters in the filter test box
+
 => 12.1.7.5
 
 Fixed a bug in ignore sync to Blizzard ignore system in Forever
